@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The screen shown when the development server will not start now shows the last lines of the server log, including how each attempt ended, and offers Copy Report. The reason was written only to a file the editor could reach, and the editor was what had failed to open.
 - Opening a phone folder such as Documents with File > Open Folder or Add Folder to Workspace now warns that Android hides the files other apps saved there, and offers **VSCodroid: Open Folder from Device**, which shows them.
 - **VSCodroid: Open Folder from Device** is offered in the remote indicator menu and the empty Explorer as well as the Command Palette.
+- The terminal runs programs stored under the app's own files: a compiled program, a `#!/bin/sh` script, a Git hook in a cloned repository, a command pip installed into a virtual environment. Each starts through the system dynamic linker, as the Termux build on Google Play does, because Android will not start such a file directly. Programs an extension starts itself are not covered; `"LD_PRELOAD": null` in `terminal.integrated.env.linux` turns it off.
 
 ### Changed
 
