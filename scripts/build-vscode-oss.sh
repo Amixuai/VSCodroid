@@ -624,6 +624,25 @@ if [ -n "$leftover" ]; then
     exit 1
 fi
 
+# Helper programs nothing on Android can start. @microsoft/mxc-sdk's bin/ holds
+# a glibc lxc-exec, two Mach-O and ten Windows PE files. The package's own code
+# is imported only by out/server-main.js behind a win32 test and by the agent
+# host, which patch 0020 keeps from starting; MXC_BIN_DIR, which the Copilot
+# extension sets, is read only by that package's dist/platform.js; and it picks
+# lxc-exec only when os.platform() is 'linux', where Node here reports
+# 'android'. @vscode/sandbox-runtime picks vendor/seccomp/<process.arch>, arm64
+# on a device, so its x64 apply-seccomp is never chosen. Only x64 goes, never
+# the whole vendor/seccomp, so an arm64 helper added upstream would be kept.
+# verify-server-tree.py refuses a tree still carrying either.
+for dead in node_modules/@microsoft/mxc-sdk/bin \
+            node_modules/@vscode/sandbox-runtime/vendor/seccomp/x64; do
+    if [ -e "$OUT/$dead" ]; then
+        size=$(du -sh "$OUT/$dead" | cut -f1)
+        rm -rf "$OUT/$dead"
+        echo "  removed $dead, helpers Android cannot run ($size)"
+    fi
+done
+
 # Every minified bundle ends with a sourceMappingURL pointing at
 # main.vscode-cdn.net and naming the upstream commit, written by the minify
 # task's hardcoded URL. The .map files are filtered out of the package, so the
@@ -890,9 +909,22 @@ step "Package"
 # Packed here rather than in the workflow so a local build and a CI build produce
 # the same file. The contents are stored without a leading directory, so the
 # fetcher extracts straight into whatever name the app expects.
+#
+# Members in name order, owned by 0/0 and stamped with the source commit time
+# (the value product.json's `date` carries), so the tarball depends on the tree
+# rather than on the runner's user, clock and readdir order. gzip already writes
+# no name and a zero MTIME when tar pipes into it. --format=gnu pins GNU tar
+# 1.35's default, so a host defaulting to posix cannot add pax time headers.
+# The epoch is assigned on its own line because set -e does not see a failed
+# command substitution inside an argument.
 TARBALL="$WORK/vscode-reh-web-linux-$ARCH-$VSCODE_VERSION.tar.gz"
+epoch=$(git -C "$SRC" log -1 --format=%ct)
+case "$epoch" in
+    ''|*[!0-9]*) echo "ERROR: no commit time for $SRC: '$epoch'" >&2; exit 1 ;;
+esac
 t0=$SECONDS
-tar -C "$OUT" -czf "$TARBALL" .
+tar --sort=name --format=gnu --mtime="@$epoch" --owner=0 --group=0 --numeric-owner \
+    -C "$OUT" -czf "$TARBALL" .
 elapsed $(( SECONDS - t0 ))
 echo "  tarball : $TARBALL"
 du -h "$TARBALL" | awk '{print "  size    : "$1}'

@@ -3822,6 +3822,13 @@ claude() {
         // good. Ahead of the pre-flight they are measured as free space rather
         // than credited as tree already unpacked.
         pruneUnshippedServerEntries("vscode-reh/node_modules/@github")
+        // The same for @microsoft/mxc-sdk's bin/: about 29 MB of Windows, macOS
+        // and glibc helpers nothing on Android can start, which server trees
+        // built before build-vscode-oss.sh pruned them left on the device.
+        pruneUnshippedServerEntries("vscode-reh/node_modules/@microsoft/mxc-sdk")
+        // And @vscode/sandbox-runtime's vendor/seccomp, whose only content was an
+        // x86-64 apply-seccomp; the APK now ships vendor/seccomp-src alone.
+        pruneUnshippedServerEntries("vscode-reh/node_modules/@vscode/sandbox-runtime/vendor")
     }
 
     fun getPreviousVersionCode(): Int {
