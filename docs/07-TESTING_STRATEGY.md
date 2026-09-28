@@ -92,11 +92,12 @@ temporary directory, and is executed directly by `node`.
 | DNS proxy | The Basic-auth token on the loopback proxy every musl DNS lookup goes through | `scripts/test-dns-proxy.js` |
 | Bridge relay | The BroadcastChannel relay injected into the workbench | `scripts/test-bridge-relay.js` |
 | Download capture | The script that makes saving a file out of the Explorer possible at all | `scripts/test-download-capture.js` |
+| Arrow edge guard | That a Left or Right at the start or end of a text box is cancelled, and one that can still move the caret or that a handler already used is not | `scripts/test-arrow-edge-guard.js` |
 | Serve on Network | The port scan and its reachable/local split | `scripts/test-serve-network.js` |
 | Welcome | That the walkthrough and side bar markers are written only after the command they record actually ran | `scripts/test-welcome.js` |
 | xdg-open | The `openExternal` message `xdg-open.js` sends over the editor's CLI socket, and that anything but an `http` or `https` address is refused rather than sent | `scripts/test-xdg-open.js` |
 
-**Run**: all ten, one `node` invocation each, in the `Check the bundled
+**Run**: all eleven, one `node` invocation each, in the `Check the bundled
 JavaScript runtime` step of `lint.yml`, and again in `release.yml`, on Node 24,
 the major the APK ships (`check-build-steps.py` holds the pins there). `lint.yml`
 also runs the `--self-test` entry points of `check-workflow-steps.py`,
@@ -133,7 +134,7 @@ test source.
 
 ### 3.2 Instrumented Tests
 
-52 tests across eleven classes, in `android/app/src/androidTest/`. They
+53 tests across eleven classes, in `android/app/src/androidTest/`. They
 need an `arm64-v8a` device or emulator, because the app ships that ABI alone.
 Counted from the sources (`grep -cE '^\s*@Test'` over the directory), because no
 run covers the whole set and none of it is scheduled. Nothing holds this figure
@@ -150,7 +151,7 @@ to the suite; `android/app/src/androidTest/README.md` states the total that
 | **FileObserverTreeSemanticsTest** | The platform behaviour SAF write-back rests on: a watch covers a directory and not a tree, and an event reports the bare entry name | arm64 device |
 | **SafWatchWiringTest** | That those semantics are wired up: a save two directories down is queued for write-back, a scratch file beside it is not, and a skipped directory is never watched | arm64 device |
 | **KeyRowAccessibilityInstrumentedTest** | The extra key row's screen-reader surface: content descriptions, the state a latched modifier and the alternates layer announce, that a key and an alternate each call themselves a button, that every key clears 48dp at each width the row is paged for (320, 360, 411 and 448dp), and the trackpad's one action per arrow | arm64 device |
-| **TextEntryInstrumentedTest** | That `virtualKeyboardEvents` types what the row asks it to, against the device's real `KeyCharacterMap`: every typeable key and alternate resolves to presses that produce it, `{` is pressed with Shift held, and every press carries the virtual-keyboard device id and a current timestamp | arm64 device |
+| **TextEntryInstrumentedTest** | That `virtualKeyboardEvents` types what the row asks it to, against the device's real `KeyCharacterMap`: every typeable key and alternate resolves to presses that produce it, `{` is pressed with Shift held, and every press carries the virtual-keyboard device id and a current timestamp; and that each navigation key is one press, down then up, with its key code, its scan code and a latched Shift | arm64 device |
 | **GestureTrackpadTouchInstrumentedTest** | Multi-pointer `MotionEvent`s on the trackpad: a second finger taking over does not jump the caret, and an untracked finger lifting does not end the drag | arm64 device |
 | **ExecTrampolineOnDeviceTest** | The kernel policy no JVM test can ask about: a payload under `filesDir` cannot be executed directly, the trampoline runs the same payload by bare name, an unknown name fails with a reason, an environment row in the table reaches the program, and a variable the caller already has is not overwritten. The direct-execve control is asserted first, so a device that never denied anything fails loudly rather than passing for the wrong reason | arm64 device |
 
