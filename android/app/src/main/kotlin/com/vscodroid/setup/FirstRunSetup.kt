@@ -787,10 +787,10 @@ class FirstRunSetup(
 
     /**
      * @param sameLengthIsCurrent take a file already at the asset's own length as
-     *   current whatever build wrote it, which [resumeSameBuild] alone permits
-     *   only within one interrupted run. A per-launch repair of a single file
-     *   passes it, because the version bump that could make equal length lie
-     *   re-extracts the whole tree behind it anyway.
+     *   current, which [resumeSameBuild] alone permits only within one
+     *   interrupted run. Equal length is not equal content, so the caller
+     *   answers for the rest: [ensureExecPreload] passes it only for a file
+     *   written since the package was last installed or updated.
      * @return false only when the asset existed and its copy failed.
      */
     private fun extractAssetFile(
@@ -1485,7 +1485,8 @@ class FirstRunSetup(
 
     /**
      * Puts the exec interceptor under `usr/lib` on any launch that finds it
-     * missing or not the asset's length.
+     * missing, not the asset's length, or older than the package's last install
+     * or update.
      *
      * The full `usr/` extraction already writes it on every version bump, so
      * this covers the two launches that extraction does not reach. A
@@ -1509,6 +1510,15 @@ class FirstRunSetup(
      * library is a dead terminal and not a degraded one. `isFile` alone was the
      * obvious guard and is the wrong one.
      *
+     * Length alone is not enough either, because nothing else rewrites the file
+     * on that same-version reinstall: a rebuilt library can keep the old one's
+     * length, and one changed constant in `scripts/termux-exec.patch` did
+     * (measured, 68,376 bytes both ways), so the length check alone kept the
+     * old interceptor under the new build. A file older than the package's last
+     * install or update is therefore rewritten whatever its length, once, since
+     * the write moves its mtime past that time. One stat and one package lookup
+     * when it is current.
+     *
      * Ahead of the settings refresh in SplashActivity. The refresh writes the
      * LD_PRELOAD line only when this file is there, and that guard, not the
      * order, is what keeps the line from ever standing alone: a build that
@@ -1519,12 +1529,24 @@ class FirstRunSetup(
      * and the line in the same launch rather than one launch apart.
      */
     fun ensureExecPreload() {
+        val written = File(context.filesDir, Environment.EXEC_PRELOAD_ASSET).lastModified()
         extractAssetFile(
             Environment.EXEC_PRELOAD_ASSET,
             Environment.EXEC_PRELOAD_ASSET,
-            sameLengthIsCurrent = true,
+            sameLengthIsCurrent = written >= packageUpdateTime(),
         )
     }
+
+    /**
+     * When this package was last installed or updated, or 0 when that cannot be
+     * read, which leaves [ensureExecPreload] to the length check alone.
+     */
+    private fun packageUpdateTime(): Long =
+        try {
+            context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        } catch (e: Exception) {
+            0L
+        }
 
     /**
      * Aliases Copilot's platform-named paths under the name Android resolves.

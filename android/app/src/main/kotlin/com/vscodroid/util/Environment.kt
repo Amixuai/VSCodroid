@@ -575,7 +575,8 @@ object Environment {
      * git hook and a venv's console script run from the terminal. Built by
      * `scripts/build-termux-exec.sh` into `assets/usr/lib`, extracted with the
      * rest of `usr/` on every version bump, and re-extracted on any launch that
-     * finds it missing or the wrong length (`FirstRunSetup.ensureExecPreload`).
+     * finds it missing, the wrong length or older than the package's last
+     * install or update (`FirstRunSetup.ensureExecPreload`).
      *
      * A real file under filesDir, and nothing else will do, because Bionic
      * treats a preload name like a DT_NEEDED: one it cannot find aborts the

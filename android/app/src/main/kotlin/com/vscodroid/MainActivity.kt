@@ -648,11 +648,12 @@ class MainActivity : AppCompatActivity() {
         // On the main thread, as SplashActivity runs its block, and guarded the
         // way its repair() guards each one: a full disk turning the write into
         // an exception costs this repair and not the launch. When the file is
-        // whole this is a stat of the file and a read of the asset's length,
-        // and it sits ahead of MainThreadWatch.install() at the tail of this
-        // method, so on the first onCreate of a process the write, deliberate,
-        // precedes the policy; a later onCreate in the same process runs under
-        // the policy the earlier one installed, which only logs.
+        // current this is a stat of the file, a read of the asset's length and
+        // a package lookup, and it sits ahead of MainThreadWatch.install() at
+        // the tail of this method, so on the first onCreate of a process the
+        // write, deliberate, precedes the policy; a later onCreate in the same
+        // process runs under the policy the earlier one installed, which only
+        // logs.
         try {
             FirstRunSetup(this).ensureExecPreload()
         } catch (e: Exception) {
