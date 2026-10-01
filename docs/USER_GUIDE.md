@@ -365,6 +365,11 @@ your choice survives relaunches. The same `null` in the **User** tab, which is
 the one Settings opens on, does not switch it off: the app's own file outranks
 it.
 
+A preload of your own belongs in that tab too, for the same reason: an
+`LD_PRELOAD` you set in the **User** tab is replaced by the app's entry. To
+keep both, put your library after the path VSCodroid wrote, separated by a
+colon.
+
 ---
 
 ## Extensions
