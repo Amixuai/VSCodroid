@@ -3,7 +3,11 @@ set -euo pipefail
 # The .o globs below feed llvm-ar in the host's collation order, and the archive
 # member order reaches the link: en_US and C put a different object first, and
 # the two libraries differ in section layout (same size, same exports). Pinned
-# so every host builds what the Ubuntu runner builds.
+# so the layout does not depend on the host's locale. That is all it pins: the
+# NDK's linux-x86_64 and darwin-x86_64 packages stamp different clang producer
+# strings into .comment (+bolt, +mlgo against -bolt, -mlgo), and the GNU
+# build-id hashes them, so a library built on macOS differs from the runner's
+# in those bytes and its build-id while its code is identical.
 export LC_ALL=C
 
 # Builds the exec interceptor the editor's terminals preload.
@@ -46,8 +50,9 @@ export LC_ALL=C
 #
 # Built from source rather than taken from Termux's .deb. Upstream's decisions
 # assume Termux's layout, where the prefix holds every binary, and five of them
-# are wrong for this app; scripts/termux-exec.patch names each. The .deb is
-# also linked with an rpath into Termux's own data directory.
+# are wrong for this app; scripts/termux-exec.patch names each, and fixes an
+# upstream overflow on an exec with no argv[0] besides. The .deb is also
+# linked with an rpath into Termux's own data directory.
 #
 # Compile and link lines follow the upstream Makefile targets
 # build-libtermux-core_nos_c_tre (termux-core), build-libtermux-exec_nos_c_tre
@@ -169,9 +174,11 @@ done
 
 echo ""
 echo "--- patch ---"
-# -F0: no fuzz. The upstream tree is pinned, so a hunk that needs fuzz to fit
-# means the pin or the patch changed, and that is worth a stopped build rather
-# than a hunk applied a few lines from where it was written.
+# -F0: no fuzz, so every context line of a hunk has to match. A hunk whose
+# context changed means the pin or the patch moved, and that is worth a stopped
+# build. It does not refuse an offset, a hunk that matches a few lines from
+# where it was written; what keeps the tree the patch meets fixed is the
+# tarball digests above.
 patch -p1 -F0 -d "$TE_SRC" < "$PATCH"
 
 echo ""
@@ -180,7 +187,9 @@ echo "--- compile ---"
 CFLAGS=(-Wall -Wextra -Werror -Wshadow -O2 -D_FORTIFY_SOURCE=2 -fstack-protector-strong -fPIC)
 # Upstream LDFLAGS_DEFAULT without the Termux rpath. Then 16 KB pages, which
 # Android 16 requires and NDK 27 does not default to, and a GNU build-id, which
-# Play's native crash support needs to pair a symbol upload with the binary.
+# a tombstone prints beside each frame, so a crash names the exact build. No
+# symbol file for this library goes to Play; release.yml's symbols zip leaves
+# it out.
 LDFLAGS=(-Wl,--enable-new-dtags -Wl,--as-needed -Wl,-z,relro,-z,now
     -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384 -Wl,--build-id=sha1)
 
