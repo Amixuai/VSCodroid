@@ -192,13 +192,14 @@ the device.
 
 Go was here as TC-1 and TC-5, the second of them recording `go build` as an
 expected failure. It is no longer offered. `go` starts its compiler and linker as
-separate programs from the app's own storage, and at the time nothing started a
-file stored there for it: `-toolexec` could not help, since it governs how `go`
-runs its tools and `go` itself was what failed to start. The terminal's exec
-interceptor (TT-14 to TT-18) now starts such files through the system linker,
-so that reason no longer holds, but nothing here promises Go's return. An
-install that still carries it is removed on the first launch of a build that has
-this line, so the row to run instead is TC-8.
+separate programs from the app's own storage, and Android refuses a direct
+`execve` of anything stored there, a limit `-toolexec` cannot route around: it
+only changes which program `go` starts, and `go` starting a program there is
+what fails. The terminal's exec interceptor (TT-14 to TT-18) does not change
+that, because `go` makes the `execve` as a raw system call rather than through
+libc, so the interceptor never sees it. An install that still carries it is
+removed on the first launch of a build that has this line, so the row to run
+instead is TC-8.
 
 ## 11. Terminal & Tools
 

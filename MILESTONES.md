@@ -414,7 +414,7 @@ M6 (Release)   → Play Store release
    - [x] Java from Termux `openjdk-17` + libandroid-shmem + libandroid-spawn. 156 MB unpacked; the registry read 146 until the JDK grew past it
    - [x] Each script: download .deb → extract → place in asset pack module → strip → write manifest
    - [x] Each script fails the build on any symbolic link anywhere in the pack. Neither delivery path can carry one: an asset pack cannot hold a link, and `ToolchainManager.extractZip` writes it as a text file holding the target path
-   - Go shipped here and was withdrawn: it ran but could not compile, because `go build` forks its own compiler from the app's data directory and, outside a preloaded shell, nothing starts a file there. The terminal's exec interceptor now does; that does not reinstate Go.
+   - Go shipped here and was withdrawn: it ran but could not compile, because `go build` starts its compiler from the app's data directory with a raw `execve` system call, which Android refuses there. The terminal's exec interceptor replaces only the libc exec functions and never sees that call, so it does not change Go's case.
 
 3. **Play Asset Delivery integration** (`ToolchainManager.kt`, `ToolchainRegistry.kt`)
    - [x] Gradle asset pack modules (`toolchain_ruby/`, `toolchain_java/`)
