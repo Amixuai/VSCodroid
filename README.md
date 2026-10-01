@@ -16,6 +16,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/rmyndharis/VSCodroid?style=flat-square" alt="License"></a>
   <a href="https://github.com/rmyndharis/VSCodroid/stargazers"><img src="https://img.shields.io/github/stars/rmyndharis/VSCodroid?style=flat-square&logo=github" alt="Stars"></a>
   <a href="https://github.com/rmyndharis/VSCodroid/issues"><img src="https://img.shields.io/github/issues/rmyndharis/VSCodroid?style=flat-square" alt="Issues"></a>
+  <a href="https://buymeacoffee.com/rmyndharis"><img src="https://img.shields.io/badge/Buy_Me_a_Coffee-support-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
@@ -321,6 +322,12 @@ The bundled editor server is built from the MIT-licensed [Code - OSS](https://gi
 - Uses [Open VSX](https://open-vsx.org) extension registry, not Microsoft Marketplace.
 - See [NOTICE.md](NOTICE.md) for third-party attribution.
 - See [Privacy Policy](https://rmyndharis.github.io/VSCodroid/privacy-policy.html) for data practices.
+
+## ☕ Support
+
+VSCodroid is free and open source. If it helps you code on the go, you can support its development by buying me a coffee.
+
+<a href="https://buymeacoffee.com/rmyndharis"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="50"/></a>
 
 ## 📄 License
 
