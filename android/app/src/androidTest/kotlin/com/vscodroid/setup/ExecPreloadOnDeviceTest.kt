@@ -130,6 +130,24 @@ class ExecPreloadOnDeviceTest {
     }
 
     /**
+     * `./make` from the directory that holds it, the `./a.out` a user types.
+     * The interceptor makes a relative path absolute with getcwd(), and the
+     * kernel reports a directory under the app's data as
+     * `/data/data/<package>` for user 0 rather than the `/data/user/0` that
+     * filesDir names, so only the TERMUX_APP__LEGACY_DATA_DIR row lets it see
+     * the file as the app's. Every absolute-path case here passes without that
+     * row; this one was refused with 126 without it. `pwd -P` puts the
+     * kernel's spelling into a failure message.
+     */
+    @Test
+    fun `a preloaded shell runs the payload by a relative path`() {
+        val result = sh("cd ${probeRoot.absolutePath} && pwd -P && ./make --version", preloadEnv())
+
+        assertEquals("./make did not run through the preload: ${result.second}", 0, result.first)
+        assertTrue("something ran, but not GNU Make: ${result.second}", result.second.contains("GNU Make"))
+    }
+
+    /**
      * A shebang script under filesDir. Without the preload the kernel answers
      * EACCES for the script's own inode before it reads the interpreter line;
      * with it the interceptor reads the line itself and starts the interpreter.
@@ -146,8 +164,10 @@ class ExecPreloadOnDeviceTest {
 
     /**
      * `#!/bin/sh`, which is what git hooks, npm shims and every script written
-     * off a Linux box carry. There is no `/bin/sh` on Android and no `sh` under
-     * the prefix, so the interceptor falls through to `/system/bin/sh`.
+     * off a Linux box carry. Android has a `/bin/sh`, through its `/bin` link
+     * onto `/system/bin`, but the interceptor rewrites `/bin/sh` into the
+     * prefix before the kernel sees it, and the prefix has no `sh`, so this
+     * runs only through the patch's fallback to `/system/bin/sh`.
      */
     @Test
     fun `a script naming slash bin slash sh runs from a preloaded shell`() {
@@ -199,6 +219,30 @@ class ExecPreloadOnDeviceTest {
         val exe = result.second.trim()
         assertFalse("the shell was started through the linker and reports it as itself: $exe", exe.contains("linker"))
         assertTrue("the shell reports something other than a system path: $exe", exe.startsWith("/system/"))
+    }
+
+    /**
+     * A program that starts the linker itself, `linker64 <payload>`, as the
+     * exec trampoline and the toolchain launchers do, has the payload named in
+     * TERMUX_EXEC__PROC_SELF_EXE where upstream stripped the variable, so a
+     * payload that finds itself through it still can. The payload is a copy of
+     * the system shell under filesDir, so it can print what it was given.
+     */
+    @Test
+    fun `a linker started by hand names its payload in the environment`() {
+        val shell = File(probeRoot, "shell")
+        File("/system/bin/sh").copyTo(shell, overwrite = true)
+
+        val result = sh(
+            "/system/bin/linker64 ${shell.absolutePath} -c 'echo \"self=\$TERMUX_EXEC__PROC_SELF_EXE\"'",
+            preloadEnv(),
+        )
+
+        assertEquals("the copied shell did not start through the linker: ${result.second}", 0, result.first)
+        assertTrue(
+            "the payload was not named to itself: ${result.second}",
+            result.second.contains("self=${shell.absolutePath}"),
+        )
     }
 
     /**
