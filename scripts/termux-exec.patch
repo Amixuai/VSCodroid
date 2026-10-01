@@ -38,6 +38,13 @@ glibc build of the same sources, not on a device. Applies with `patch -p1`
 to the pristine 2.5.0 tree, `--dry-run` included; the build script applies it
 to a fresh tree on every run and stops if a hunk does not fit.
 
+Regenerate the diff below with `diff -ruN` from a pristine and a changed tree
+rather than editing a hunk by hand. Away from the ends of a file, `diff -u`
+puts three lines of context on each side of a change, and GNU patch, the one
+on the Ubuntu runners, takes a hunk with fewer lines after its change than
+before it to end the file: under the build's -F0 it then matches nowhere
+else, while macOS's patch applies it anyway.
+
 diff -ruN a/lib/termux-exec_nos_c/tre/include/termux/termux_exec__nos__c/v1/termux/api/termux_exec/service/ld_preload/direct/exec/ExecIntercept.h b/lib/termux-exec_nos_c/tre/include/termux/termux_exec__nos__c/v1/termux/api/termux_exec/service/ld_preload/direct/exec/ExecIntercept.h
 --- a/lib/termux-exec_nos_c/tre/include/termux/termux_exec__nos__c/v1/termux/api/termux_exec/service/ld_preload/direct/exec/ExecIntercept.h
 +++ b/lib/termux-exec_nos_c/tre/include/termux/termux_exec__nos__c/v1/termux/api/termux_exec/service/ld_preload/direct/exec/ExecIntercept.h
@@ -104,7 +111,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
  #define _GNU_SOURCE
  #include <elf.h>
  #include <errno.h>
-@@ -43,8 +44,46 @@
+@@ -43,9 +44,47 @@
  __attribute__((visibility("hidden")))
  int execveInterceptInternal(const char *origExecutablePath, char *const argv[], char *const envp[]);
  
@@ -151,6 +158,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
 +
      bool debugLoggingEnabled = getCurrentLogLevel() >= LOG_LEVEL__NORMAL;
  
+     if (debugLoggingEnabled) {
 @@ -154,7 +193,7 @@
          const char *normalizedExecutablePath = executablePath;
  
