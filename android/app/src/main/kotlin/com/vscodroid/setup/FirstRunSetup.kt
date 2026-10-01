@@ -2712,7 +2712,11 @@ claude() {
             // file first and the line in the same launch.
             val preloadPath = Environment.getExecPreloadPath(context)
             val preloaded =
-                if (File(preloadPath).isFile) ensureTerminalPreload(paths ?: current, preloadPath) else null
+                if (File(preloadPath).isFile) {
+                    ensureTerminalPreload(paths ?: current, preloadPath, context.packageName)
+                } else {
+                    null
+                }
             preloaded ?: paths
         }
         // Once per install, between the two: the preferences this app used to
@@ -3243,7 +3247,8 @@ claude() {
         // process tasks alike and applies live. Nothing an extension spawns
         // without a pty sees either, which is the boundary of terminal scope.
         // `"LD_PRELOAD": null` in this object is the off switch, and the refresh
-        // leaves a key of any value alone.
+        // leaves a key of any value alone but one: this app's own path under
+        // another Android user's data directory, which it re-points.
         //
         // Only once the library is on disk, the rule [updateSettingsNativeLibPaths]
         // follows: a preload the linker cannot find aborts every exec in that
@@ -3256,7 +3261,11 @@ claude() {
         // line, [ensureTerminalPreload], so the two paths cannot disagree on
         // its shape.
         val preloadPath = Environment.getExecPreloadPath(context)
-        val content = if (File(preloadPath).isFile) ensureTerminalPreload(defaults, preloadPath) ?: defaults else defaults
+        val content = if (File(preloadPath).isFile) {
+            ensureTerminalPreload(defaults, preloadPath, context.packageName) ?: defaults
+        } else {
+            defaults
+        }
         return writeAtomically(settingsFile) { it.write(content.toByteArray()) }
     }
 
@@ -6082,6 +6091,17 @@ private val TERMINAL_ENV_LINUX_OPEN = Regex(""""terminal\.integrated\.env\.linux
 private val JSON_STRING = Regex(""""(?:\\.|[^"\\])*"""")
 
 /**
+ * An `LD_PRELOAD` entry that is the whole of this app's own interceptor path
+ * under any Android user's data directory, or under `/data/data`, the path
+ * captured. Anchored on the closing quote, so a list naming it beside another
+ * library does not match.
+ */
+private fun ownPreload(packageName: String): Regex {
+    val tail = Regex.escape("$packageName/files/${Environment.EXEC_PRELOAD_ASSET}")
+    return Regex(""""LD_PRELOAD"\s*:\s*"(/data/(?:user/\d+|data)/$tail)"""")
+}
+
+/**
  * Puts the exec interceptor into `terminal.integrated.env.linux`, or declines.
  *
  * Reaches installs made before the setting existed, the way [insertSetting]'s
@@ -6094,6 +6114,14 @@ private val JSON_STRING = Regex(""""(?:\\.|[^"\\])*"""")
  * the rule [CLAUDE_WRAPPER_KEY] draws. A key holding something other than an
  * object is not a shape this app wrote, and is left alone rather than guessed
  * at.
+ *
+ * One value is this app's to correct: its own library named under another
+ * Android user's data directory, or under `/data/data`, which is what a backup
+ * of this file restored into another user carries. That path cannot be opened
+ * here, and Bionic aborts every exec whose preload it cannot load, so left
+ * alone it kills every terminal and task. It is re-pointed to [preloadPath],
+ * the way [CLAUDE_WRAPPER] re-points the paths this app wrote; a value that
+ * lists it beside another library is the user's, and stays.
  *
  * The object is scanned with comments blanked and strings stepped over, so a
  * `}` inside a value cannot end it early and a mention inside a comment cannot
@@ -6108,9 +6136,10 @@ private val JSON_STRING = Regex(""""(?:\\.|[^"\\])*"""")
  * the wrong shape for a file the user reads. Measured on API 33 and 36
  * emulators, 2026-09-23.
  *
- * @return the document with the line, or null when there is nothing to write.
+ * @return the document with the line added or re-pointed, or null when there
+ *   is nothing to write.
  */
-internal fun ensureTerminalPreload(content: String, preloadPath: String): String? {
+internal fun ensureTerminalPreload(content: String, preloadPath: String, packageName: String): String? {
     val scan = commentsBlanked(content)
     val open = TERMINAL_ENV_LINUX_OPEN.find(scan)
         ?: return if (TERMINAL_ENV_LINUX_KEY.containsMatchIn(scan)) {
@@ -6121,7 +6150,12 @@ internal fun ensureTerminalPreload(content: String, preloadPath: String): String
         }
     val brace = open.range.last
     val close = objectEnd(scan, brace)
-    if (close < 0 || scan.substring(brace, close).contains("\"LD_PRELOAD\"")) return null
+    if (close < 0) return null
+    if (scan.substring(brace, close).contains("\"LD_PRELOAD\"")) {
+        val value = ownPreload(packageName).find(scan.substring(0, close), brace)?.groups?.get(1)?.range
+            ?: return null
+        return if (content.substring(value) == preloadPath) null else content.replaceRange(value, preloadPath)
+    }
     val indent = firstPropertyIndent(content, brace) ?: nestedIndent(content, open.range.first)
     val comma = if (scan.substring(brace + 1, close).isBlank()) "" else ","
     return content.substring(0, brace + 1) +

@@ -591,7 +591,9 @@ object Environment {
      * same way; and never a bare name, which resolves through LD_LIBRARY_PATH
      * and dies the moment a child clears that. What goes stale in a value
      * here is fatal rather than degraded, unlike every other path in the
-     * settings file.
+     * settings file. filesDir stays put within one Android user; the one way
+     * this value goes stale is a backup of the settings restored into another
+     * user, and `ensureTerminalPreload` re-points that.
      */
     fun getExecPreloadPath(context: Context): String =
         "${context.filesDir}/$EXEC_PRELOAD_ASSET"

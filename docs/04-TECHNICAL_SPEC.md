@@ -493,7 +493,9 @@ spellings needed because `getcwd` reports `/data/data`, and `TERMUX__PREFIX`) si
 environment (`Environment.buildProcessEnvironment`), where they are inert until the preload
 appears; `LD_PRELOAD` itself is deliberately not there, because anything the extension host spawns
 without a pty is outside the measured scope. `"LD_PRELOAD": null` in the same setting is the off
-switch, and the launch-time insert leaves a present key alone whatever its value. The git
+switch, and the launch-time insert leaves a present key alone whatever its value, with one
+exception: this app's own path under another Android user's data directory, which a settings
+backup restored into another user carries, is re-pointed (`ensureTerminalPreload`). The git
 extension's helpers are unchanged by the preload. `GIT_ASKPASS`, `SSH_ASKPASS` and `GIT_EDITOR`
 name scripts in `extensions/git/dist`, and each of those names is a link onto
 `libexec-trampoline.so`, which runs the shipped script, kept beside it as `<name>.script`, with

@@ -28,6 +28,8 @@ class TerminalPreloadSettingTest {
 
     private val preload = "/data/user/0/com.vscodroid/files/usr/lib/libtermux-exec.so"
 
+    private val pkg = "com.vscodroid"
+
     private fun settings(envLinux: String? = null, preamble: String = "") =
         "{\n" +
             preamble +
@@ -52,7 +54,7 @@ class TerminalPreloadSettingTest {
 
         @Test
         fun `inserts the key with the preload when the document has none`() {
-            val result = ensureTerminalPreload(settings(), preload)
+            val result = ensureTerminalPreload(settings(), preload, pkg)
 
             requireNotNull(result) { "a document without the key must gain it" }
             assertTrue(
@@ -73,7 +75,7 @@ class TerminalPreloadSettingTest {
                 "    \"editor.fontSize\": 14\n" +
                 "}\n"
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result) { "a mention inside a comment must not count as the key" }
             assertTrue(
@@ -87,7 +89,7 @@ class TerminalPreloadSettingTest {
         fun `a root object opening with a comment falls back to four spaces`() {
             val document = "{\n  // mine\n  \"editor.fontSize\": 14\n}\n"
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result)
             assertTrue(
@@ -105,7 +107,7 @@ class TerminalPreloadSettingTest {
         fun `adds one line to an object that holds other keys, at the object's indent`() {
             val document = settings(envLinux = "{\n        \"FOO\": \"bar\",\n        \"BAZ\": \"qux\"\n    }")
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result) { "an object without LD_PRELOAD must gain it" }
             val line = result.lines().single { it.contains("LD_PRELOAD") }
@@ -126,7 +128,7 @@ class TerminalPreloadSettingTest {
          */
         @Test
         fun `an empty object at root indent gains the line nested past the key, without a trailing comma`() {
-            val result = ensureTerminalPreload(settings(envLinux = "{}"), preload)
+            val result = ensureTerminalPreload(settings(envLinux = "{}"), preload, pkg)
 
             requireNotNull(result)
             assertEquals(
@@ -143,7 +145,7 @@ class TerminalPreloadSettingTest {
             // close at the key's indent.
             val document = settings(envLinux = "{\n\n    }")
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result)
             assertEquals(settings(envLinux = "{\n        \"LD_PRELOAD\": \"$preload\"\n\n    }"), result)
@@ -155,7 +157,7 @@ class TerminalPreloadSettingTest {
             // fallback again, and a case that passes either way pins nothing.
             val document = "{\n\t\"editor.fontSize\": 14,\n\t\"terminal.integrated.env.linux\": {\n\t}\n}\n"
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result)
             assertEquals(
@@ -168,7 +170,7 @@ class TerminalPreloadSettingTest {
         fun `an object whose first entry is a comment nests past the key too`() {
             val document = settings(envLinux = "{\n        // keep\n        \"FOO\": \"bar\"\n    }")
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result)
             val line = result.lines().single { it.contains("LD_PRELOAD") }
@@ -185,7 +187,7 @@ class TerminalPreloadSettingTest {
                 envLinux = "{\n        \"PS1\": \"\\\\u@} \",\n        \"LD_PRELOAD\": \"/mine.so\"\n    }",
             )
 
-            assertNull(ensureTerminalPreload(document, preload))
+            assertNull(ensureTerminalPreload(document, preload, pkg))
         }
 
         @Test
@@ -195,7 +197,7 @@ class TerminalPreloadSettingTest {
                 "    \"terminal.integrated.env.linux\": {\n        \"FOO\": \"bar\"\n    },\n" +
                 "    \"workbench.colorTheme\": \"Monokai\"\n}\n"
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result)
             val osx = result.substringAfter("\"terminal.integrated.env.osx\"")
@@ -211,24 +213,24 @@ class TerminalPreloadSettingTest {
 
         @Test
         fun `a preload the user chose is theirs`() {
-            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": \"/their/own.so\" }"), preload))
+            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": \"/their/own.so\" }"), preload, pkg))
         }
 
         @Test
         fun `null is the off switch and survives`() {
-            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": null }"), preload))
+            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": null }"), preload, pkg))
         }
 
         @Test
         fun `a second pass over our own value writes nothing`() {
-            val first = requireNotNull(ensureTerminalPreload(settings(), preload))
+            val first = requireNotNull(ensureTerminalPreload(settings(), preload, pkg))
 
-            assertNull(ensureTerminalPreload(first, preload), "the insert is not idempotent")
+            assertNull(ensureTerminalPreload(first, preload, pkg), "the insert is not idempotent")
         }
 
         @Test
         fun `a key holding something other than an object is not touched`() {
-            assertNull(ensureTerminalPreload(settings(envLinux = "null"), preload))
+            assertNull(ensureTerminalPreload(settings(envLinux = "null"), preload, pkg))
         }
 
         @Test
@@ -242,11 +244,46 @@ class TerminalPreloadSettingTest {
                     "    /* and \"LD_PRELOAD\" in a block */\n",
             )
 
-            val result = ensureTerminalPreload(document, preload)
+            val result = ensureTerminalPreload(document, preload, pkg)
 
             requireNotNull(result) { "a mention inside a comment must not count as the key" }
             assertEquals(1, result.lines().count { it.contains("\"LD_PRELOAD\": \"$preload\"") }, "one line, once:\n$result")
             assertEquals(document, without(result, "\"LD_PRELOAD\": \"$preload\""), "bytes outside the new line changed")
+        }
+    }
+
+    /**
+     * A backup of the machine settings restored into another Android user, a
+     * work profile or a secondary user, carries the path this app wrote for the
+     * user it came from. Nothing in this user can load it, and a preload the
+     * linker cannot load kills every terminal, so that one value is re-pointed.
+     */
+    @Nested
+    inner class Restored {
+
+        @Test
+        fun `this app's library under another user's data directory is re-pointed in place`() {
+            for (
+                stale in listOf(
+                    "/data/user/10/com.vscodroid/files/usr/lib/libtermux-exec.so",
+                    "/data/data/com.vscodroid/files/usr/lib/libtermux-exec.so",
+                )
+            ) {
+                val document = settings(envLinux = "{\n        \"FOO\": \"bar\",\n        \"LD_PRELOAD\": \"$stale\"\n    }")
+
+                val result = ensureTerminalPreload(document, preload, pkg)
+
+                assertEquals(document.replace(stale, preload), result, "$stale was not re-pointed in place")
+            }
+        }
+
+        @Test
+        fun `another package's library, and a list naming ours beside another, are left alone`() {
+            val termux = "/data/data/com.termux/files/usr/lib/libtermux-exec.so"
+            val list = "/data/user/10/com.vscodroid/files/usr/lib/libtermux-exec.so:/data/user/10/com.vscodroid/files/home/mine.so"
+
+            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": \"$termux\" }"), preload, pkg))
+            assertNull(ensureTerminalPreload(settings(envLinux = "{ \"LD_PRELOAD\": \"$list\" }"), preload, pkg))
         }
     }
 
@@ -255,15 +292,15 @@ class TerminalPreloadSettingTest {
 
         @Test
         fun `a document with no root object is left alone`() {
-            assertNull(ensureTerminalPreload("// only a comment\n", preload))
-            assertNull(ensureTerminalPreload("", preload))
+            assertNull(ensureTerminalPreload("// only a comment\n", preload, pkg))
+            assertNull(ensureTerminalPreload("", preload, pkg))
         }
 
         @Test
         fun `an object that never closes is left alone`() {
             val document = "{\n    \"terminal.integrated.env.linux\": {\n        \"FOO\": \"bar\"\n"
 
-            assertNull(ensureTerminalPreload(document, preload))
+            assertNull(ensureTerminalPreload(document, preload, pkg))
         }
     }
 }
