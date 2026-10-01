@@ -15,10 +15,12 @@ import org.junit.jupiter.api.Test
  * The value is a Bionic library the linker loads ahead of every program a
  * terminal starts, and a missing LD_PRELOAD entry is fatal to every exec, so the
  * rules about when NOT to write are the ones that matter most here. A key the
- * user already holds, whatever its value, is theirs: a path of their own is a
- * choice, and `"LD_PRELOAD": null` is the off switch, the same leave-alone rule
- * `claudeCode.claudeProcessWrapper` follows. And settings.json is JSONC the
- * user owns, so the insert is one line and every other byte survives.
+ * user already holds is theirs: a path of their own is a choice, and
+ * `"LD_PRELOAD": null` is the off switch, the same leave-alone rule
+ * `claudeCode.claudeProcessWrapper` follows. The one value rewritten is this
+ * app's own library path written for another Android user, which [Restored]
+ * covers. And settings.json is JSONC the user owns, so the insert is one line
+ * and every other byte survives.
  *
  * Fixtures are built by concatenation rather than `trimIndent()`, because a
  * template holding a newline shifts the minimal indent and with it every line,
