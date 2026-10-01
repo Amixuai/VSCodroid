@@ -170,6 +170,18 @@ LIBRARIES = {
     "liblzma.so": ("xz / liblzma", "LGPL-2.1, GPL-2.0, GPL-3.0"),
     "liblzma.so.5": ("xz / liblzma", "LGPL-2.1, GPL-2.0, GPL-3.0"),
     "libzstd.so.1": ("Zstandard", "GPL-2.0"),
+    # Built here from pinned upstream source by build-termux-exec.sh, so it is
+    # attributed as upstream's rather than as VSCodroid's. termux-exec-package
+    # is Apache-2.0 and the termux-core-package it links in statically is MIT,
+    # except where a file says otherwise, and three linked files do:
+    # termux-core's Canonicalize.c is GPL-2.0-only with the Classpath
+    # exception, its UnixSafeStrerror.c (Chromium) and termux-exec's
+    # ExecVariantsIntercept.c (UC Regents) are BSD-3-Clause. The script stops
+    # if that set of files changes.
+    "libtermux-exec.so": (
+        "termux-exec",
+        "Apache-2.0, MIT, BSD-3-Clause, GPL-2.0-only WITH Classpath-exception-2.0",
+    ),
     # --- permissive: attribution only ---
     "libnode.so": ("Node.js", "MIT"),
     "libpython.so": ("Python", "PSF-2.0"),
@@ -179,10 +191,6 @@ LIBRARIES = {
     "libssh.so": ("OpenSSH", "BSD"),
     "libssh-keygen.so": ("OpenSSH", "BSD"),
     "libldmusl.so": ("musl libc", "MIT"),
-    # Built here from pinned upstream source by build-termux-exec.sh, so it is
-    # attributed as upstream's rather than as VSCodroid's: termux-exec-package
-    # is Apache-2.0, and the termux-core-package it links in statically is MIT.
-    "libtermux-exec.so": ("termux-exec", "Apache-2.0, MIT"),
     "libandroid-support.so": ("libandroid-support", "Apache-2.0, MIT"),
     "libandroid-glob.so": ("libandroid-glob", "BSD-3-Clause"),
     "libandroid-posix-semaphore.so": ("libandroid-posix-semaphore", "MIT"),
@@ -272,8 +280,9 @@ TOOLCHAIN_LIBRARIES = {
 #     the libc symlink, the metadata), so download-musl-loader.sh places
 #     licenses/COPYRIGHT.musl instead;
 #   * termux-exec never passes through a package here: build-termux-exec.sh
-#     compiles it from the upstream tarballs and copies both LICENSE files and
-#     the texts they point at into usr/share/doc/termux-exec itself.
+#     compiles it from the upstream tarballs and copies both LICENSE files, the
+#     texts they point at, the headers of the three files with terms of their
+#     own and Chromium's LICENSE into usr/share/doc/termux-exec itself.
 #
 # Keyed by component rather than by file, because that is the unit the two
 # attribution documents and LIBRARIES are written in, and because one package's
@@ -290,6 +299,7 @@ NOTICE_DIRS = {
     "xz / liblzma": "usr/share/doc/liblzma",
     "Zstandard": "usr/share/doc/zstd",
     "GMP": "usr/share/doc/libgmp",
+    "termux-exec": "usr/share/doc/termux-exec",
     # --- permissive ---
     "Node.js": "usr/share/doc/nodejs-lts",
     "Python": "usr/share/doc/python",
@@ -297,7 +307,6 @@ NOTICE_DIRS = {
     "tmux": "usr/share/doc/tmux",
     "OpenSSH": "usr/share/doc/openssh",
     "musl libc": "usr/share/doc/musl",
-    "termux-exec": "usr/share/doc/termux-exec",
     "libandroid-support": "usr/share/doc/libandroid-support",
     "libandroid-glob": "usr/share/doc/libandroid-glob",
     "libandroid-posix-semaphore": "usr/share/doc/libandroid-posix-semaphore",

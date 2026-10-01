@@ -132,7 +132,7 @@ verbatim; `docs/LEGAL_NOTICES.md` records which text covers which component.
 | readline | GPL-3.0 | Bash, Python |
 | ripgrep | MIT | bundled tool in its own right |
 | SQLite | Public Domain | Node.js, Python |
-| termux-exec | Apache-2.0, MIT | preloaded into every terminal; built here from upstream source, https://github.com/termux/termux-exec-package |
+| termux-exec | Apache-2.0, MIT, BSD-3-Clause, GPL-2.0-only WITH Classpath-exception-2.0 | preloaded into every terminal; built here from upstream source, https://github.com/termux/termux-exec-package |
 | tmux | ISC | bundled tool in its own right |
 | xz / liblzma | LGPL-2.1, GPL-2.0, GPL-3.0 | Python |
 | zlib | Zlib | Git, Node.js, OpenSSH, Python, SQLite, libcurl, libssh2, and the on-demand Java and Ruby toolchains |

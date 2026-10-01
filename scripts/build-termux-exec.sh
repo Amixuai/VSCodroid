@@ -86,6 +86,10 @@ TC_COMMIT=63bf9286ad86603f9a58de73e4c740926c88f5e3
 TC_URL="https://github.com/termux/termux-core-package/archive/$TC_COMMIT.tar.gz"
 TC_SHA256=92a87ca75d51e0566abc198e7306276ab8293fddb3d778c526f7bbed77dc759e
 TC_DIR="termux-core-package-$TC_COMMIT"
+# The licence termux-core's UnixSafeStrerror.c refers to rather than quotes,
+# at the commit its header names. See the notices below.
+CHROMIUM_LICENSE_URL="https://raw.githubusercontent.com/chromium/chromium/e4622aaeccea84652488d1822c28c78b7115684f/LICENSE"
+CHROMIUM_LICENSE_SHA256=845022e0c1db1abb41a6ba4cd3c4b674ec290f3359d9d3c78ae558d4c0ed9308
 
 TARGET=aarch64-linux-android
 API=33
@@ -145,6 +149,7 @@ fetch() {
 }
 fetch "$TE_URL" "$WORK_DIR/$TE_DIR.tar.gz" "$TE_SHA256"
 fetch "$TC_URL" "$WORK_DIR/$TC_DIR.tar.gz" "$TC_SHA256"
+fetch "$CHROMIUM_LICENSE_URL" "$WORK_DIR/LICENSE.chromium" "$CHROMIUM_LICENSE_SHA256"
 
 # Unpacked fresh every run, so the patch always meets a pristine tree and a
 # rerun cannot land on an already applied hunk.
@@ -281,6 +286,49 @@ for src in "$TE_SRC" "$TC_SRC"; do
         cp "$text" "$DOC_DIR/LICENSE.$pkg.${text##*__}"
     done
 done
+
+# Both LICENSE files give way to a file that says otherwise, and three of the
+# sources linked in here do. termux-core's Canonicalize.c is AOSP libcore's
+# canonicalize_md.c (Oracle and stargateoss, GPL-2.0-only with the Classpath
+# exception), #included by UnixFileUtils.c for normalizePath(); its
+# UnixSafeStrerror.c is Chromium's (BSD-3-Clause, with the text in Chromium's
+# LICENSE); termux-exec's ExecVariantsIntercept.c carries the Regents of the
+# University of California's BSD-3-Clause notice. Each header ships as
+# written, as LICENSE.<package>.<file>, and Chromium's LICENSE beside them.
+#
+# NOTICE.md, docs/LEGAL_NOTICES.md and check-library-attribution.py record
+# these by hand, and nothing else reads a source file, which is how all three
+# were first recorded as Apache-2.0 and MIT. So the build stops when the
+# sources carrying a copyright line of their own are not exactly these.
+OWN_TERMS="Canonicalize.c ExecVariantsIntercept.c UnixSafeStrerror.c"
+found=""
+while IFS= read -r file; do
+    grep -q "Copyright" "$file" || continue
+    found="$found $(basename "$file")"
+    pkg="${file#"$SRC/"}"
+    pkg="${pkg%%/*}"
+    header="$DOC_DIR/LICENSE.${pkg%-*}.$(basename "$file")"
+    # The first comment block that holds the copyright line, delimiters kept.
+    awk '/\/\*/ { block = ""; inside = 1 }
+        inside { block = block $0 "\n" }
+        inside && /\*\// { inside = 0; if (block ~ /Copyright/) { printf "%s", block; exit } }' \
+        "$file" > "$header"
+    if [ ! -s "$header" ]; then
+        echo "  ERROR: no licence header found in $file" >&2
+        exit 1
+    fi
+done < <(find "$TC_SRC/lib/termux-core_nos_c/tre/src" "$TE_SRC/lib/termux-exec_nos_c/tre/src" \
+    "$TE_SRC/$ENTRY" -name '*.c')
+found="$(printf '%s\n' $found | sort | tr '\n' ' ' | sed 's/ $//')"
+if [ "$found" != "$OWN_TERMS" ]; then
+    echo "  ERROR: the sources with licence terms of their own changed" >&2
+    echo "    recorded: $OWN_TERMS" >&2
+    echo "    found   : $found" >&2
+    echo "  Record the new terms in NOTICE.md, docs/LEGAL_NOTICES.md and" >&2
+    echo "  check-library-attribution.py, then update OWN_TERMS." >&2
+    exit 1
+fi
+cp "$WORK_DIR/LICENSE.chromium" "$DOC_DIR/LICENSE.chromium"
 for f in "$DOC_DIR"/*; do
     echo "  $(basename "$f") ($(wc -c < "$f" | tr -d ' ') bytes)"
 done
