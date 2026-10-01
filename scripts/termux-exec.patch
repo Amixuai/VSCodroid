@@ -25,11 +25,16 @@ for tools the prefix does not carry.
   P5  The /system fallback of P3 also applies when TERMUX__PREFIX is unset and
       the compiled-in default does not exist, the one case P3 alone made
       worse: /bin/sh ran with no preload and failed with it.
+  P6  An exec with no argv[0], a NULL argv or argc 0, goes to the kernel as
+      it stands, as it did with no preload. Upstream sized the argv it builds
+      for the linker from argc, wrote one pointer past its end, and handed
+      the linker no program, so it printed its usage and exited 0.
 
 Each changed file gains a first-line notice that it was modified, which the
 Apache-2.0 licence (section 4(b)) asks of a redistributed modification.
 
-Measured on API 33 and 36 emulators, 2026-09-22/23. Applies with `patch -p1`
+P1 to P5 were measured on API 33 and 36 emulators, 2026-09-22/23; P6 on a
+glibc build of the same sources, not on a device. Applies with `patch -p1`
 to the pristine 2.5.0 tree, `--dry-run` included; the build script applies it
 to a fresh tree on every run and stops if a hunk does not fit.
 
@@ -99,7 +104,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
  #define _GNU_SOURCE
  #include <elf.h>
  #include <errno.h>
-@@ -43,8 +44,38 @@
+@@ -43,8 +44,46 @@
  __attribute__((visibility("hidden")))
  int execveInterceptInternal(const char *origExecutablePath, char *const argv[], char *const envp[]);
  
@@ -136,9 +141,17 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
 +
 +
  int execveIntercept(bool intercept, const char *executablePath, char *const argv[], char *const envp[]) {
++    // An exec with no argv[0], a NULL argv or argc 0, both of which the
++    // kernel accepts, goes to it as it stands, as it did with no preload:
++    // everything below reads argv[0], and the argv modifyExecArgs() builds
++    // for the linker is sized from argc, one pointer short without it.
++    if (argv == NULL || argv[0] == NULL) {
++        return execveSyscall(executablePath, argv, envp);
++    }
++
      bool debugLoggingEnabled = getCurrentLogLevel() >= LOG_LEVEL__NORMAL;
  
-@@ -154,7 +185,7 @@
+@@ -154,7 +193,7 @@
          const char *normalizedExecutablePath = executablePath;
  
  
@@ -147,7 +160,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
              processedExecutablePathBuffer, sizeof(processedExecutablePathBuffer));
          if (executablePath == NULL) {
              logStrerrorDebug(LOG_TAG, "Failed to prefix normalized executable path '%s'", normalizedExecutablePath);
-@@ -352,14 +383,27 @@
+@@ -352,14 +391,27 @@
      // If `system_linker_exec` is going to be used, then set `TERMUX_EXEC__PROC_SELF_EXE`
      // environment variable to `processedExecutablePath`, otherwise
      // unset it if it is already set.
@@ -178,7 +191,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
              return -1;
          }
      } else {
-@@ -571,7 +615,7 @@
+@@ -571,7 +623,7 @@
  
          const char *normalizedInterpreterPath = interpreterPath;
  
@@ -187,7 +200,7 @@ diff -ruN a/lib/termux-exec_nos_c/tre/src/termux/api/termux_exec/service/ld_prel
              interpreterPath, info->interpreterPathBuffer, interpreterPathBufferSize);
          if (info->interpreterPath == NULL) {
              logStrerrorDebug(LOG_TAG, "Failed to prefix normalized interpreter path '%s'", normalizedInterpreterPath);
-@@ -665,11 +709,12 @@
+@@ -665,11 +717,12 @@
  
  
  bool shouldUnsetLDVarsFromEnv(bool isNonNativeElf, const char *executablePath) {

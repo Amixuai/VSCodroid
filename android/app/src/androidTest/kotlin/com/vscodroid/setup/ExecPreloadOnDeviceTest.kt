@@ -1,6 +1,9 @@
 package com.vscodroid.setup
 
 import android.content.Context
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.vscodroid.util.Environment
@@ -213,6 +216,36 @@ class ExecPreloadOnDeviceTest {
     }
 
     /**
+     * An exec with no argv[0] goes to the kernel as it stands, as it did with
+     * no preload, so a payload under filesDir is refused rather than handed to
+     * the linker. Linux accepts argc 0, and the rewrite sized the linker's argv
+     * from argc: it wrote one pointer past the end and gave the linker no
+     * program, which printed its usage and exited 0.
+     *
+     * No shell can make that call, so [ExecveWithArgv] makes it from Java under
+     * `app_process`, through `Os.execve` into the libc `execve` the preload
+     * replaces. The first run is the control: the same route with an ordinary
+     * argv has to start the payload through the linker, or a refusal in the
+     * second run would say nothing about the library.
+     */
+    @Test
+    fun `an exec with no argv0 is refused as it is without the preload`() {
+        val control = execveFromJava(payload.absolutePath, "--version")
+        assertTrue(
+            "app_process did not start the payload through the preload, so this case " +
+                "cannot speak for it: ${control.second}",
+            control.second.contains("GNU Make"),
+        )
+
+        val result = execveFromJava()
+
+        assertTrue(
+            "an exec with no argv[0] was not refused the way the kernel refuses it: ${result.second}",
+            result.second.contains("execve: EACCES"),
+        )
+    }
+
+    /**
      * The failure shape every repair of the value has to keep in mind. Bionic
      * treats a preload name like a `DT_NEEDED`: one it cannot find aborts the
      * exec, the system shell included, with no warning mode. This is why the
@@ -250,6 +283,25 @@ class ExecPreloadOnDeviceTest {
     private fun sh(command: String, env: Map<String, String>): Pair<Int, String> =
         run(listOf("/system/bin/sh", "-c", command), env)
 
+    /**
+     * `execve(payload, argv, environ)` made by [ExecveWithArgv] in a process
+     * started with the preload. The app's own APK joins the test APK on the
+     * class path for the Kotlin runtime, which the test APK leaves to it.
+     */
+    private fun execveFromJava(vararg argv: String): Pair<Int, String> {
+        val testApk = InstrumentationRegistry.getInstrumentation().context.packageCodePath
+        return run(
+            listOf(
+                "/system/bin/app_process",
+                "-Djava.class.path=$testApk:${context.packageCodePath}",
+                "/system/bin",
+                ExecveWithArgv::class.java.name,
+                payload.absolutePath,
+            ) + argv,
+            preloadEnv(),
+        )
+    }
+
     /** Exit status and merged output of one command, run with exactly [env] added. */
     private fun run(command: List<String>, env: Map<String, String>): Pair<Int, String> {
         val builder = ProcessBuilder(command).redirectErrorStream(true)
@@ -265,6 +317,24 @@ class ExecPreloadOnDeviceTest {
             // expected shape. Reported as 126, the status a shell gives for
             // "found but could not be executed".
             126 to (e.message ?: e.toString())
+        }
+    }
+}
+
+/**
+ * `execve(args[0], args[1..], environ)` from Java, which can pass an argv no
+ * shell can write: an empty one. Run under `app_process` by
+ * [ExecPreloadOnDeviceTest]; prints the errno's name when the exec is refused.
+ */
+object ExecveWithArgv {
+    @JvmStatic
+    fun main(args: Array<String>) {
+        val env = System.getenv().map { (key, value) -> "$key=$value" }.toTypedArray()
+        try {
+            Os.execve(args[0], args.copyOfRange(1, args.size), env)
+        } catch (e: ErrnoException) {
+            println("execve: ${OsConstants.errnoName(e.errno)}")
+            System.out.flush()
         }
     }
 }
