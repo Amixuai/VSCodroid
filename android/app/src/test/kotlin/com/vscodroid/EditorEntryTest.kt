@@ -84,15 +84,15 @@ class EditorEntryTest {
      *
      * The machine settings name `usr/lib/libtermux-exec.so` in `LD_PRELOAD` for
      * every terminal, and the linker aborts every exec whose preload it cannot
-     * map, the shell included. Measured on API 33 and 36 emulators, 2026-09-23:
-     * with that file deleted, a direct start of this activity and a launcher
-     * tap that merely resumed it both left it absent, and every terminal the
-     * panel opened died with CANNOT LINK EXECUTABLE until a cold launch through
-     * `SplashActivity` put it back. So this route restores it too, after the
-     * hand-off (a fresh install has no tree to repair into and is leaving
-     * anyway) and before the service, whose first act recreates the terminals
-     * that need it, inside a guard of its own so a full disk costs the repair
-     * and not the launch.
+     * map, the shell included. Measured 2026-09-23 with that file deleted: a
+     * direct start of this activity on API 33 and 36 emulators, and a launcher
+     * tap that merely resumed it on API 33, each left it absent, and every
+     * terminal the panel opened died with CANNOT LINK EXECUTABLE until a cold
+     * launch through `SplashActivity` put it back. So this route restores it
+     * too, after the hand-off (a fresh install has no tree to repair into and
+     * is leaving anyway) and before the service, whose first act recreates the
+     * terminals that need it, inside a guard of its own so a full disk costs
+     * the repair and not the launch.
      */
     @Test
     fun `the exec preload is restored on this route, between the hand-off and the server start`() {
