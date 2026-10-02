@@ -175,6 +175,24 @@ class ExecPreloadEnvTest {
         assertEquals(Environment.getExecPreloadPath(context), preloadValue(settingsText()))
     }
 
+    /**
+     * The same guard on the launch-time refresh, which is the path every
+     * upgrade takes: the default writer replaces only a missing or empty
+     * settings.json, so a file that predates the line gets it from this call.
+     * With no library on disk it must still write none.
+     */
+    @Test
+    fun `the launch-time refresh writes no LD_PRELOAD while the library is missing`() {
+        createDefaultSettings()
+
+        FirstRunSetup(context).updateSettingsNativeLibPaths()
+
+        assertFalse(
+            settingsText().contains("LD_PRELOAD"),
+            "the refresh wrote a preload for a file that is not there:\n${settingsText()}",
+        )
+    }
+
     private fun createDefaultSettings() {
         FirstRunSetup::class.java
             .getDeclaredMethod("createDefaultSettings")
