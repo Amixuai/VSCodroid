@@ -42,9 +42,11 @@ import java.util.concurrent.TimeUnit
  * is left at the mode the write gives it, 0600 under the app's umask, because
  * that is the mode the extraction leaves the real one in and what the linker
  * has to be able to map. That 0600 case is what this suite measures for the
- * first time; the linker's behaviour on a missing preload and the patched
- * paths below were measured on API 33 and 36 emulators, 2026-09-22/23, with
- * 755-mode copies of the library.
+ * first time; the linker's behaviour on a missing preload and P1 to P5 of
+ * `scripts/termux-exec.patch` were measured on API 33 and 36 emulators,
+ * 2026-09-22/23, with 755-mode copies of the library. P6 and the three cases
+ * added on 2026-10-01 (the relative path, the linker started by hand and the
+ * exec with no argv[0]) have not run on a device yet.
  */
 @RunWith(AndroidJUnit4::class)
 class ExecPreloadOnDeviceTest {
@@ -136,8 +138,11 @@ class ExecPreloadOnDeviceTest {
      * `/data/data/<package>` for user 0 rather than the `/data/user/0` that
      * filesDir names, so only the TERMUX_APP__LEGACY_DATA_DIR row lets it see
      * the file as the app's. Every absolute-path case here passes without that
-     * row; this one was refused with 126 without it. `pwd -P` puts the
-     * kernel's spelling into a failure message.
+     * row. With it unset, every relative exec of a filesDir ELF was refused
+     * with 126 on API 33 and 36 emulators, 2026-09-22/23 (the note on the row
+     * in `Environment.buildProcessEnvironment`); this case itself has not been
+     * run without it. `pwd -P` puts the kernel's spelling into a failure
+     * message.
      */
     @Test
     fun `a preloaded shell runs the payload by a relative path`() {
