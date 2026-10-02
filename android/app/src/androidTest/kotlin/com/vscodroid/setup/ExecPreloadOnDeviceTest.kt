@@ -41,9 +41,10 @@ import java.util.concurrent.TimeUnit
  * than from `usr/lib`, so the suite does not depend on first-run state, and it
  * is left at the mode the write gives it, 0600 under the app's umask, because
  * that is the mode the extraction leaves the real one in and what the linker
- * has to be able to map. That 0600 case is what this suite measures for the
- * first time; the linker's behaviour on a missing preload and P1 to P5 of
- * `scripts/termux-exec.patch` were measured on API 33 and 36 emulators,
+ * has to be able to map. The extracted library has loaded at that mode in real
+ * terminals on API 33 and 36 emulators (2026-09-23), and this suite pins the
+ * case; the linker's behaviour on a missing preload and P1 to P5 of
+ * `scripts/termux-exec.patch` were measured on the same emulators,
  * 2026-09-22/23, with 755-mode copies of the library. P6 and the three cases
  * added on 2026-10-01 (the relative path, the linker started by hand and the
  * exec with no argv[0]) have not run on a device yet.
