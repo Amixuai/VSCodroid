@@ -1516,8 +1516,9 @@ class FirstRunSetup(
      * (measured, 68,376 bytes both ways), so the length check alone kept the
      * old interceptor under the new build. A file older than the package's last
      * install or update is therefore rewritten whatever its length, once, since
-     * the write moves its mtime past that time. One stat and one package lookup
-     * when it is current.
+     * the write moves its mtime past that time. When it is current that costs a
+     * package lookup, a few stats of the file and an open of the asset for its
+     * length, and no write.
      *
      * Ahead of the settings refresh in SplashActivity. The refresh writes the
      * LD_PRELOAD line only when this file is there, and that guard, not the
