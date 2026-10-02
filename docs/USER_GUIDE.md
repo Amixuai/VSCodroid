@@ -578,9 +578,11 @@ npm init -y
 npm install express
 ```
 
-The React steps avoid `npm create vite@latest` and the template's own `vite` scripts,
-which stop with `bad interpreter: Permission denied`; [npm and npx](#npm-and-npx) says
-why. The template's `lint` and `preview` scripts need the same change:
+The React steps start create-vite and Vite with `node`, which works with or without the
+terminal's program loader. In a terminal `npm create vite@latest` and the template's own
+`vite` scripts run as well; where the loader does not reach they stop with
+`bad interpreter: Permission denied`, and [npm and npx](#npm-and-npx) says why. There the
+template's `lint` and `preview` scripts need the same change:
 
 ```bash
 npm pkg set scripts.lint="node node_modules/oxlint/bin/oxlint" scripts.preview="node node_modules/vite/bin/vite.js preview"
@@ -591,8 +593,7 @@ npm pkg set scripts.lint="node node_modules/oxlint/bin/oxlint" scripts.preview="
 When running a local dev server (Vite, Next.js, Express, Flask, etc.), you can preview it
 **inside the editor**, in a tab beside your code:
 
-1. Start the dev server in the terminal, from a `dev` script that runs it through
-   `node` as the React steps above set it up:
+1. Start the dev server in the terminal:
    ```bash
    npm run dev
    # Output: Local: http://localhost:5173/
@@ -646,15 +647,19 @@ npm install express            # Install a package
 npm run start                  # Run a script from package.json
 ```
 
-Starting a package's program by name does not work: `npx <tool>`, `npm create` and
-`npm init <initializer>`, and a `package.json` script such as `"dev": "vite"`, all exit
-with status 126 and `Permission denied`; when the program is a JavaScript file the
-message reads `/usr/bin/env: bad interpreter: Permission denied`. npm starts those
-through the file in `node_modules/.bin`, and Android refuses to execute a file inside
-the app's storage. Run the program's JavaScript file with `node` instead, such as
-`node node_modules/vite/bin/vite.js` for `vite`; the package's `package.json` names that
-file under `bin`. A script that starts with `node`, like `"start": "node server.js"`,
-works as it is.
+In a terminal, a package's program starts by name as it does on a desktop: `npx <tool>`,
+`npm create` and `npm init <initializer>`, and a `package.json` script such as
+`"dev": "vite"`. npm starts each through the file in `node_modules/.bin`, which Android
+refuses to execute because it is inside the app's storage, so the terminal hands it to
+the system's program loader (see [What Runs in the Terminal](#what-runs-in-the-terminal)).
+
+Where that loader does not reach, such as a program an extension starts on its own, or a
+terminal where it is switched off, the same starts exit with status 126 and
+`Permission denied`; when the program is a JavaScript file the message reads
+`/usr/bin/env: bad interpreter: Permission denied`. There, run the program's JavaScript
+file with `node` instead, such as `node node_modules/vite/bin/vite.js` for `vite`; the
+package's `package.json` names that file under `bin`. A script that starts with `node`,
+like `"start": "node server.js"`, works as it is.
 
 npm uses `--prefer-offline` by default to speed up installs by using cached packages when available.
 
@@ -1053,9 +1058,12 @@ does not need that particular binary works. What needs it does not run.
 This is not every package with a native part. Rollup, Rolldown, Lightning CSS and
 oxlint publish Android builds that Node loads as libraries, and npm installs them,
 which is why VSCodroid reports the platform it actually is rather than pretending
-to be Linux. esbuild publishes one too, but as a program: its install step runs
-it, Android refuses to execute it from the app's storage, and the install fails.
-Vite 8 does not need esbuild; Vite 7 and older depend on it and do not install.
+to be Linux. esbuild publishes one too, but as a program, and its install step
+runs it. Without the terminal's program loader (see
+[What Runs in the Terminal](#what-runs-in-the-terminal)) Android refuses to execute
+it from the app's storage and the install fails; whether esbuild runs through the
+loader has not been measured. Vite 8 does not need esbuild; Vite 7 and older
+depend on it.
 
 ### Toolchains Must Be Started by Name
 
