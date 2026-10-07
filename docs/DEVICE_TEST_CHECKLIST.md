@@ -86,6 +86,7 @@
 | SC-8 | Side bar stays open on a tablet | Same steps on a device wider than 600dp | Side bar stays where it was; `settings.json` has `vscodroid.layout.compactScreen` false and no `vscodroid.layout.autoHideSideBar` at all | | |
 | SC-10 | The side bar setting has a control | Settings, search `autoHideSideBar` | The row draws a dropdown offering auto, on and off, not an "Edit in settings.json" link. Pick `on` on a tablet and `off` on a phone and check each one overrides the screen | | |
 | SC-9 | A setting you change is the one that applies | Settings, User tab, set `editor.minimap.enabled` true, reopen a file, then restart the app | The minimap appears and is still there after the restart. It is the app's own defaults that must not win here | | |
+| SC-11 | UI scale | Command Palette, **VSCodroid: UI Scale**, note the sizes offered and pick the largest. Tap a file in the Explorer, place the caret in a word, type, open a context menu, the Command Palette, a hover and a terminal, rotate, then reload the window and restart the app. Finish with 100% | The offer stops where the page would be under 320 CSS px wide (125% on a 411 dp phone). The whole interface is larger and fills the screen with nothing cut off at the right; taps, the caret, menus, the keyboard and the key row land where they should; the terminal is legible; the size survives the rotation, the reload and the restart, with no flash at 100% on load; 100% restores the original layout | | |
 
 ## 5. Editor Operations
 
@@ -151,6 +152,7 @@ fresh.
 | ST-2 | Many terminals | Open 10 terminal tabs | Bash spawns for each, process count reported | | |
 | ST-3 | OOM recovery | Force WebView OOM (open huge file + extensions) | onRenderProcessGone fires, WebView recreated | | |
 | ST-4 | Storage nearly full | Fill device storage to under 100 MB free, as Settings reports it | Warning toast shown, app still functional | | |
+| ST-5 | Bug report after a renderer death | After ST-3, or on a debug build after crashing the renderer from DevTools (`Page.crash`), run **VSCodroid: Copy Bug Report** once the editor is back; delete one line, wait for the notification to go, then tap **Copy Bug Report** in the status bar and paste somewhere; close the report | An untitled editor opens with the report. Renderer Deaths has a line for the death, saying crashed or killed by the system, and Recent Exits lists the app's recent process exits or says none are recorded. The paste is the editor's text without the deleted line. The status bar entry goes with the report | | |
 
 ## 9. Performance Benchmarks
 
@@ -248,14 +250,17 @@ first launch of a build that has this line, so the row to run instead is TC-8.
 | SF-11 | Conflicting edits, the other way round | With the folder closed, edit a file with another app; then open the folder in the editor, edit the same file there, force-stop the app before the save reaches the device, and reopen the folder | The editor's version wins on the device and the other app's version is beside it as `<name>.device-<time>`; neither is lost. An ordinary save with no device edit leaves no such copy | | |
 | SF-12 | A device folder holding one workspace file | Grant a folder whose top level holds exactly one `.code-workspace`; then relaunch the app | It opens as that workspace rather than as the folder, and the same workspace comes back after the relaunch | | |
 | SF-13 | A folder named like a workspace | Grant a folder whose own name ends in `.code-workspace` | It opens as a folder, not as an unreadable workspace with an empty window | | |
-| SF-14 | A folder you closed stays closed | Open a folder, run **File: Close Folder**, force-stop the app, relaunch through the launcher | The empty window comes back, not the folder that was closed. Opening a folder again and relaunching must still reopen it | | |
+| SF-14 | A folder you closed stays closed | Open a folder, choose **File > Close Folder** (in the Command Palette, **Workspaces: Close Workspace**), force-stop the app, relaunch through the launcher | The empty window comes back, not the folder that was closed. Opening a folder again and relaunching must still reopen it | | |
 | SF-15 | A second window is this window | Run **New Window** from the Command Palette, then **Open Folder in New Window** | The editor reuses its own window. The device browser must not come to the front, and no popup-blocked message appears over the editor | | |
 | SF-16 | An external link still leaves the app | With a dev server running on another port, follow a link to it from the editor | The device browser opens it. This is the branch the window reuse above must not swallow | | |
 | SF-17 | Conflicting edits while open | Open a folder; save a file once in the editor; change the same file with another app; edit and save it again in the editor | The first save adds no copy. After the second, the editor's version is on the device and the other app's version is beside it as `<name>.device-<time>`, in the Explorer and in the device folder. A further save with no change from the other app adds no second copy | | |
 | SF-18 | Saves to a folder that settles them late | Open a folder on a phone or camera attached over USB (MTP), or a Nextcloud folder; save one file three times in the editor, with no other app involved; then change it with another app on this phone, working through the same folder, so that its length changes, and save it once more | Each of the first three saves reaches the device, and none adds a `<name>.device-<time>` copy of an earlier save or of the file as it was opened. After the last save the other app's version is beside the file as `<name>.device-<time>`. These providers report a save's final time and size only after the save has ended, which must not read as another app's edit. An Android phone attached over MTP keeps a file's old modification time, so there only a change of length shows the other app's edit. An edit made on the attached device itself is not seen until the folder is listed again | | |
 | SF-19 | Reopening after a low-storage open | Open a folder and save one of its files in the editor; close the app, change a different file of the folder with another app, and fill the phone's storage until less than 150 MB is free; open the folder and save the first file again; then free the space and open the folder once more | The low-storage open says one file could not be copied, and the second save of the first file reaches the device. The last open shows the other app's version, and no `<name>.local-<number>` file appears in the Explorer or in the device folder | | |
-| SF-20 | A phone folder opened by path | Save a file into `Documents/<folder>` with another app. In the editor, run **File > Open Folder**, type `/storage/emulated/0/Documents/<folder>` and open it; tap **Open Folder from Device** in the warning, then cancel the picker. Open `/sdcard/Download` the same way. Open the first folder again, tap **Don't Show Again**, and relaunch | The folder shows its subfolders and not the file, and one warning names it; its button opens Android's folder picker. For `/sdcard/Download` the warning says to pick a folder inside it. After **Don't Show Again** the folder reopens at launch with no warning, and a device folder's copy never raises one | | |
-| SF-21 | The device route is in view | Tap the remote indicator at the left end of the status bar; then run **File: Close Folder** and look at the Explorer | The menu lists **VSCodroid: Open Folder from Device**, and the empty Explorer shows a button for it below the text about folders in the device's storage; both open Android's folder picker | | |
+| SF-20 | A phone folder opened by path | Save a file into `Documents/<folder>` with another app. In the editor, run **File > Open Folder**, type `/sdcard/Download` and open it, and cancel the dialog. Open `/storage/emulated/0/Documents/<folder>` the same way; tap **Open Folder from Device** in the dialog, then cancel the picker. Run **Developer: Reload Window**, then open the same folder as `/sdcard/documents/<folder>/`. Force-stop the app and relaunch it, and tap **Don't Show Again**; then force-stop and relaunch once more | The folder shows its subfolders and not the file. Each folder raises one dialog naming it, and for `/sdcard/Download` it says to pick a folder inside it; its button opens Android's folder picker. The reload and the second spelling raise none, the first relaunch raises the folder's dialog once more, and after **Don't Show Again** the second relaunch raises none. A device folder's copy never raises one | | |
+| SF-21 | The device route is in view | Tap the remote indicator at the left end of the status bar; then choose **File > Close Folder** (in the Command Palette, **Workspaces: Close Workspace**) and look at the Explorer | The menu lists **VSCodroid: Open Folder from Device**, and the empty Explorer shows a button for it below the text about folders in the device's storage; both open Android's folder picker | | |
+| SF-22 | Folders the picker treats differently | With **File > Open Folder**, open `/sdcard/Android/data`, then a folder under `/sdcard/Android/obb` if one exists. With an SD card or a USB drive attached, open its top, `/storage/<id>`, tap **Open Folder from Device** in the dialog and try to use that top folder in the picker | For `Android/data` and the `Android/obb` folder the dialog says Android keeps those folders to the app they belong to and that Open Folder from Device cannot open them, and offers only **Don't Show Again**. For the volume's top it names the SD card or USB drive and says a USB drive can be opened as it is, while on an SD card a folder inside has to be picked; the picker grants a USB drive's top and refuses an SD card's | | |
+| SF-23 | A device folder shows its name | Open a folder with **Open Folder from Device**, then reopen it from **VSCodroid: Open Recent Folder**; force-stop the app and relaunch it; open a terminal, run `pwd` and `git status` in a repository folder, and save a file | Each time, the Explorer root and the title bar show the folder's name, not a twelve-character code. The terminal opens in the folder with `[saf]` as its prompt, and git sees the repository. The save reaches the device | | |
+| SF-24 | A folder opened before names | Install the previous release, open a device folder, change a file without saving it and open a terminal. Install this build over it without clearing data and relaunch; choose **Reopen** in the notice, then save the file, close the terminal, relaunch and choose **Reopen** again | The folder reopens under its code with the unsaved change, and the notice offers its name. The first **Reopen** says to save and close the terminal first and moves nothing. The second reopens the folder under its name with the same files open. **File > Open Recent** lists both, and a further relaunch opens the folder by name with no notice | | |
 
 ---
 
@@ -277,17 +282,17 @@ first launch of a build that has this line, so the row to run instead is TC-8.
 | Device Matrix | 4 | | | |
 | Android Versions | 4 | | | |
 | Keyboard Input | 33 | | | |
-| Screen & Orientation | 10 | | | |
+| Screen & Orientation | 11 | | | |
 | Editor Operations | 14 | | | |
 | Extensions | 7 | | | |
 | Background/Foreground | 9 | | | |
-| Low Memory & Stress | 4 | | | |
+| Low Memory & Stress | 5 | | | |
 | Performance | 10 | | | |
 | Toolchains | 7 | | | |
 | Terminal & Tools | 13 | | | |
-| SAF & Files | 21 | | | |
+| SAF & Files | 24 | | | |
 | Display Language | 6 | | | |
-| **Total** | **142** | | | |
+| **Total** | **147** | | | |
 
 **Overall Result**: [ ] PASS / [ ] FAIL
 

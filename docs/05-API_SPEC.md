@@ -211,20 +211,27 @@ workbench page, so anything running in that page's own realm can call them direc
 extension cannot: it runs in the web extension host, which does not see objects added by
 `addJavascriptInterface`. Extensions reach the bridge over the BroadcastChannel relay
 that `MainActivity.injectBridgeRelay` opens, and that relay dispatches a hand-written
-list of **15** command names. Grep `d.cmd ===` in `MainActivity.kt` for the current set:
+list of **17** command names. Grep `d.cmd ===` in `MainActivity.kt` for the current set:
 
 > `clearCaches`, `generateBugReport`, `generateSshKey`, `getRecentFolders`,
-> `getSshPublicKey`, `getStorageBreakdown`, `listSafMirrors`, `listSshKeys`,
-> `openExternalUrl`, `openFolderPicker`, `openRecentFolder`,
-> `openToolchainSettings`, `reclaimSafMirror`, `showAboutDialog`,
+> `getSshPublicKey`, `getStorageBreakdown`, `getUiScale`, `listSafMirrors`,
+> `listSshKeys`, `openExternalUrl`, `openFolderPicker`, `openRecentFolder`,
+> `openToolchainSettings`, `reclaimSafMirror`, `setUiScale`, `showAboutDialog`,
 > `toggleExtraKeyRow`
+
+Two of them reach no bridge method. `getUiScale` and `setUiScale` are answered by the
+page itself, since the UI scale is the page's own viewport kept in its localStorage:
+the document-start script `addUiScaleScript` registers leaves the hook they call, and
+**VSCodroid: UI Scale** sends both.
 
 A method absent from that list is unreachable from any extension however correctly it is
 registered, which is why the toolchain install, removal and cancel calls have no callers.
 `openToolchainSettings` is on the list and now has a sender as well: the bundled
 saf-bridge extension contributes **VSCodroid: Manage Toolchains**, so the Toolchains
 screen has a route from inside the editor and the launcher long-press shortcut is one of
-two ways in rather than the only one.
+two ways in rather than the only one. `generateBugReport` has one too:
+**VSCodroid: Copy Bug Report** opens its answer in an untitled editor and copies what that
+editor holds when the user chooses Copy.
 
 Adding a method to `AndroidBridge` does not publish it; the relay branch is a second,
 separate edit. Forgetting it is now reported rather than silent: the chain's final branch
@@ -690,11 +697,20 @@ fun generateBugReport(authToken: String): String
 // Generates a bug report containing:
 // - Device info (model, Android version, app version)
 // - Memory usage
+// - The system's record of how this app's ten most recent processes ended
+//   (ActivityManager.getHistoricalProcessExitReasons): time, process,
+//   reason by name (ANR, LOW_MEMORY, CRASH_NATIVE, ...), status,
+//   importance, pss and rss, and the system's description
+// - The last 20 renderer deaths, from renderer.log under
+//   Environment.getLogsDir, which both onRenderProcessGone overrides write
+//   through CrashReporter.recordRendererDeath: time, crashed or killed by
+//   the system, and the renderer priority at exit
 // - How many crash logs exist, plus the text of the three most recent
 // - The last 200 lines of the Node server's output, read from `server.log`
 //   under Environment.getLogsDir. ProcessManager.startOutputReader mirrors
 //   every line the server prints into that file through ServerLog, in every
 //   build, so the section is present rather than silently empty.
+// Answers the empty string only when the session token is refused.
 // Everything read off disk has the connection token replaced wherever it
 // appears as a `tkn=` parameter, and the server log is redacted a second
 // time on the way in so the token never lands in the file at all; that pass
@@ -1111,7 +1127,7 @@ flowchart TD
   T --> T3["ms-python.python"]
   T --> T4["dbaeumer.vscode-eslint"]
   T --> T5["bradlc.vscode-tailwindcss"]
-  O --> O1["vscodroid.vscodroid-saf-bridge (the 11 VSCodroid: commands)"]
+  O --> O1["vscodroid.vscodroid-saf-bridge (the 13 VSCodroid: commands)"]
   O --> O2["vscodroid.vscodroid-welcome (Get Started walkthrough)"]
   O --> O3["vscodroid.vscodroid-process-monitor"]
   O --> O4["vscodroid.vscodroid-serve-network (LAN address of a dev server on this device)"]

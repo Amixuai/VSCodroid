@@ -363,6 +363,7 @@ sequenceDiagram
 sequenceDiagram
   participant K as Kotlin Native Shell
   participant W as WebView
+  K->>W: addDocumentStartJavaScript() (the UI scale, applied as each page is parsed)
   K->>W: injectBridgeToken() to trusted workbench context
   K->>W: evaluateJavascript() (announce a key chord, memory pressure, a late reply)
   W->>K: @JavascriptInterface: copyToClipboard()
@@ -499,6 +500,7 @@ flowchart TD
   B5 --> B5b["server.js, process-monitor.js, platform-fix.js, dns-proxy.js, xdg-open.js"]
   B5 --> B5c["editor-server.pid (pid and port of the running server)"]
   B --> B6["saf-mirrors/ (one hash-named local copy per granted device folder)"]
+  B6 --> B6a["by-name/ (a link to each copy, named after its folder,<br/>which the editor opens so the folder shows its own name)"]
   B --> B7["projects/ (default workspace on a new install)"]
   A --> C["lib/ (nativeLibraryDir, read-only)"]
   C --> C1["libnode.so"]
@@ -563,6 +565,9 @@ rotated to its last lines once it outgrows a byte cap, so it cannot grow without
 That directory holds more than this app writes: `ProcessManager.startServer` points the
 server's `--logsPath` at it, and the server's own log service writes `remoteagent.log`
 there, Extension Host output included. Nothing writes `exthost.log` under any name.
+`renderer.log` there is this app's own: both `onRenderProcessGone` overrides note each
+renderer death in it through `CrashReporter.recordRendererDeath`, since the death otherwise
+reaches Logcat alone, and a report quotes the last 20 lines.
 
 ### 8.3 Configuration
 

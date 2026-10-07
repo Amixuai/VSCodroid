@@ -52,16 +52,20 @@ VSCodroid is VS Code. If you have used VS Code on desktop, everything works the 
   dialog reaches Documents, Downloads or an SD card, but VSCodroid holds no
   storage permission, so Android shows it the folders there and hides every file
   another app saved in them. Such a folder opens with its subfolders and none of
-  those files; the editor then warns and offers the route below.
+  those files; the editor then says so in a dialog, once per folder each time its
+  server starts rather than on every reload, and offers the route below.
 - For a folder anywhere else on the device, run **VSCodroid: Open Folder from
   Device**: tap the remote indicator at the left end of the status bar, tap the
   button in the empty Explorer, or use the Command Palette. It opens Android's
   folder picker; pick the folder and allow access, and the files other apps
   saved in it show as well, apart from what the copy below leaves out. Android
-  grants access one folder at a time, and not to the top of the storage, the
-  top of an SD card or the Download folder itself, so pick a folder inside
-  those. **VSCodroid: Open Recent Folder**, in the same menu, lists the folders
-  you have granted, with **Browse device...** at the end to add another.
+  grants access one folder at a time, and not to the top of the storage or of an
+  SD card, nor to the Download or Android folder itself, so pick a folder inside
+  those. Nothing in `Android/data`, `Android/obb` or `Android/sandbox` can be
+  granted, since Android keeps each app's folder there to that app. A USB drive
+  can be granted whole. **VSCodroid: Open Recent Folder**, in the same menu,
+  lists the folders you have granted, with **Browse device...** at the end to
+  add another.
 - A device folder is edited as a copy inside the app. The copy is read from the
   device when you open the folder, and each save is written back to the device
   as you make it. It leaves out files over 50 MB, and the directories `.git`,
@@ -79,6 +83,13 @@ VSCodroid is VS Code. If you have used VS Code on desktop, everything works the 
   the file as you opened it. If the device folder's version cannot be copied, as
   can happen in a network folder while it is offline even when no other app
   changed the file, your save stays inside VSCodroid and a notice says so.
+- The Explorer and the title bar show a device folder under its own name. A
+  folder opened in an earlier version is shown under a twelve-character code
+  such as `8e440ff38c8e`, the name of its copy, and offers to reopen under its
+  own name. While a file has unsaved changes or a terminal is open, **Reopen**
+  asks you to save or close them first, since they would stay with the code;
+  the files that were open come back with the folder. **Don't Ask Again** keeps
+  the code for that folder.
 - A `.code-workspace` file opens as a multi-root workspace: open the file and
   choose **Open Workspace**. On a device folder its roots have to sit inside the
   folder you granted, because nothing outside that folder is reachable.
@@ -113,6 +124,14 @@ VSCodroid stores settings in `~/.vscodroid/`. Key defaults:
 - The terminal profile points to the bundled Bash.
 
 To edit settings as JSON, use the Command Palette: `Preferences: Open User Settings (JSON)`.
+
+### Text Size
+
+**VSCodroid: UI Scale**, in the Command Palette, sets the size of the whole interface: the side bar, tabs, menus, status bar, panels and editor together. It offers 100%, 110%, 125% and 150%, but only the sizes that keep the page at least 320 CSS pixels wide, so most phones go up to 110% or 125% and tablets to 150%. The size is kept when the window reloads and when the app restarts. A size that does not take effect on your device is put back to 100%, and the command says so when you pick it.
+
+To change the text in one place only, use the `editor.fontSize` and `terminal.integrated.fontSize` settings, which are remembered. **Increase Editor Font Size** in the Command Palette also works, but it is not bound to a key and it resets when the window reloads.
+
+Android's Font size setting does not reach the editor's interface. Its Display size setting does, and it enlarges every app on the device.
 
 ### Extra Key Row
 
@@ -824,7 +843,7 @@ In the file tree:
 
 - Connect a Bluetooth keyboard for the best experience with complex editing.
 - Without an external keyboard, rely heavily on the Command Palette (**Ctrl+Shift+P**) and the Extra Key Row.
-- Pinch-to-zoom is disabled to prevent layout issues. Change text size with the `editor.fontSize` and `terminal.integrated.fontSize` settings, which are remembered. **Increase Editor Font Size** in the Command Palette also works, but it is not bound to a key and it resets when the window reloads.
+- Pinch-to-zoom is disabled to prevent layout issues; [Text Size](#text-size) lists what makes things larger.
 
 ---
 
@@ -1303,6 +1322,7 @@ This is usually caused by Android's memory management killing background process
 2. Reduce the number of open terminal tabs.
 3. Check the process monitor in the status bar -- if phantom count is high, close unused terminals.
 4. On devices with 4 GB RAM or less, consider keeping only one project open at a time.
+5. If it keeps happening, send a report; see [Sending a Bug Report](#sending-a-bug-report).
 
 ### Dev Server Not Accessible in Browser
 
@@ -1322,6 +1342,12 @@ If the preview tab or the device browser opens but the page does not load:
 If the editor UI crashes but the app stays open, VSCodroid automatically recovers the WebView and reconnects to the running server. Your terminal sessions and unsaved work in the editor state are preserved.
 
 Recovery is bounded, because reloading a page that is itself the cause only repeats the crash. Three crashes inside a minute are recovered from as normal; a fourth stops the automatic reload and puts up a page saying so, with a **Try again** button that reloads the editor when you are ready. The server keeps running behind it either way, so nothing needs force-closing.
+
+### Sending a Bug Report
+
+If the editor freezes, reloads by itself or the app closes, run **VSCodroid: Copy Bug Report** from the Command Palette once the editor is back. The report opens in a new editor tab: the device and app version, how Android recorded the app's recent exits (one it declared not responding shows as `ANR`, one closed to free memory as `LOW_MEMORY`), each time the process that draws the editor died, the newest crash logs and the last 200 lines of the server log. Nothing is sent anywhere.
+
+Read it before you share it. The server log can name your files and folders, and you can delete any line you want kept private. Then tap **Copy** in the notification that comes with it, or **Copy Bug Report** in the status bar, which stays there while the report is open, and paste the report into an issue at [github.com/rmyndharis/VSCodroid/issues](https://github.com/rmyndharis/VSCodroid/issues).
 
 ---
 

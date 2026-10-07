@@ -51,6 +51,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import com.vscodroid.util.EditorLocale
 import com.vscodroid.util.Environment
 import com.vscodroid.bridge.AUTH_TAB_WINDOW_MILLIS
@@ -1170,8 +1172,12 @@ class MainActivity : AppCompatActivity() {
             // lookup asks the system server for every persisted grant and prunes
             // the recent list against the answer, and a cold start whose remembered
             // workspace is a mirror reaches it with the workbench already drawn.
+            //
+            // The note is disk work beside it: a page on the copy's named path is
+            // recorded, and a page on its hash path gets a named path to move to.
             val folder = withContext(Dispatchers.IO) {
                 safManager.folderForOpenedPath(folderPath)
+                    ?.also { safManager.noteOpened(folderPath, it) }
             }
             val mirror = SafStorageManager.mirrorNameFor(
                 folderPath, Environment.getSafMirrorsDir(this@MainActivity),
@@ -1293,9 +1299,12 @@ class MainActivity : AppCompatActivity() {
                 // missing from the recent list with nothing to explain it. The sync
                 // below must still be skipped in that case, which the ordinary hop
                 // after this one does by throwing.
-                val displayName = withContext(NonCancellable + Dispatchers.IO) {
+                val (displayName, copyIsNew) = withContext(NonCancellable + Dispatchers.IO) {
                     safManager.persistPermission(uri)
-                    safManager.getDisplayName(uri)
+                    // Asked before the sync below makes the copy. A copy older than this
+                    // open may have been opened by its hash path, which the workbench
+                    // keeps its own state under; see deviceFolderTarget.
+                    safManager.getDisplayName(uri) to !safManager.getMirrorDir(uri).exists()
                 }
                 dialog.setMessage(getString(R.string.saf_sync_message, displayName))
 
@@ -1374,19 +1383,27 @@ class MainActivity : AppCompatActivity() {
 
                 dialog.dismiss()
 
-                // Reload VS Code with the mirror, or with the workspace it holds.
-                // The listing is off the main thread for the reason every other
-                // disk read here is: `MainThreadWatch` installs a policy that
-                // logs one, and `folderOpenTarget` stats each candidate.
+                // Reload VS Code with the mirror, or with the workspace it holds,
+                // by the folder's own name where that is safe. The listing and the
+                // link are off the main thread for the reason every other disk
+                // read here is: `MainThreadWatch` installs a policy that logs one,
+                // and `folderOpenTarget` stats each candidate.
                 if (navigate && serverPort > 0) {
                     val target = withContext(Dispatchers.IO) {
-                        folderOpenTarget(
+                        val opened = folderOpenTarget(
                             mirrorDir.absolutePath,
                             mirrorDir.list()?.asList().orEmpty(),
                         )
-                    }
-                    if (target != mirrorDir.absolutePath) {
-                        Logger.i(tag, "The granted folder holds a workspace; opening that")
+                        if (opened != mirrorDir.absolutePath) {
+                            Logger.i(tag, "The granted folder holds a workspace; opening that")
+                        }
+                        deviceFolderTarget(
+                            target = opened,
+                            mirrorPath = mirrorDir.absolutePath,
+                            namedPath = safManager.namedPathFor(mirrorDir, displayName)?.path,
+                            byName = copyIsNew || safManager.wasShownByName(mirrorDir),
+                            openNow = openWorkspaceFolder,
+                        )
                     }
                     // Readiness rather than the port, for the reason recreateWebView
                     // gives: a device-folder sync can run for minutes, and a server
@@ -1997,6 +2014,10 @@ class MainActivity : AppCompatActivity() {
         webView = findViewById(R.id.webView)
         webView?.let { wv ->
             VSCodroidWebView.configure(wv)
+            // Before the first load below: a document-start script runs only in
+            // documents that begin loading after it was added. The view
+            // recreateWebView builds comes through here as well.
+            addUiScaleScript(wv)
             dropCacheLeftByEarlierBuild(wv)
             applyWindowInsetsPadding(wv)
             // Here and not in initBridge, which does its work once per WebView
@@ -2135,6 +2156,7 @@ class MainActivity : AppCompatActivity() {
         override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
             Logger.e(tag, "Render process gone before the workbench loaded: " +
                 "didCrash=${detail.didCrash()}")
+            CrashReporter.recordRendererDeath(view.context, detail)
             recreateWebView()
             return true
         }
@@ -4781,13 +4803,14 @@ class MainActivity : AppCompatActivity() {
                     // there because that strip is already far wider than 12px, but
                     // narrow it and this rule starts deciding its width.
                     '  .slider { min-width: 12px !important; }',
-                    // The chrome's own text, which no setting in this build can reach.
+                    // The chrome's own text, which no setting of the workbench's reaches.
                     // `editor.fontSize` governs the editor and nothing else; the
-                    // workbench styles itself from 622 literal `font-size` rules in
-                    // workbench.css, this build registers no window zoom action and
-                    // ignores `window.zoomLevel`, and `WebSettings.textZoom` is pinned
-                    // at 100. So the only lever left for the parts a phone user
-                    // actually reads is this stylesheet.
+                    // workbench styles itself from hundreds of literal pixel
+                    // `font-size` declarations in workbench.css, this build registers
+                    // no window zoom action and ignores `window.zoomLevel`, and
+                    // `WebSettings.textZoom` is pinned at 100. What does reach it is
+                    // VSCodroid: UI Scale, which scales the whole page through its
+                    // viewport (addUiScaleScript). These sizes are the 100% it scales.
                     //
                     // Measured on an API 37 emulator through the DevTools protocol, at
                     // the 411 CSS px viewport a phone gives: a pane header was 11px, a
@@ -5243,9 +5266,12 @@ class MainActivity : AppCompatActivity() {
      *    can open a terminal and run anything as this app's uid, so every reading
      *    command here (`getRecentFolders`, `getStorageBreakdown`, `listSafMirrors`,
      *    `getSshPublicKey`, `listSshKeys`, `generateBugReport`) discloses what the
-     *    caller could already read off the filesystem. They stay, and what changes
-     *    instead is that they hand over no more than they must: `listSshKeys` no
-     *    longer reports a key's comment, which is conventionally an email address.
+     *    caller could already read off the filesystem, apart from the system's
+     *    record of how this app's own processes ended, which `generateBugReport`
+     *    quotes: times, reasons and memory, nothing of the user's. They stay, and
+     *    what changes instead is that they hand over no more than they must:
+     *    `listSshKeys` no longer reports a key's comment, which is conventionally
+     *    an email address.
      *  - Commands that put an Android surface on screen (`openFolderPicker`,
      *    `openToolchainSettings`, `showAboutDialog`) are visible and dismissible,
      *    and none of them changes anything on its own. They stay.
@@ -5257,6 +5283,10 @@ class MainActivity : AppCompatActivity() {
      *    by every listener. That is accepted on the first bullet's terms: such a
      *    caller already has a terminal. What it costs is a convenience, not the
      *    user's work, and the user can always run the command again.
+     *  - `getUiScale` and `setUiScale` reach no Android code: the page answers
+     *    them from its own viewport and localStorage. Any caller can change the
+     *    size unasked, as with the key row, but only to a size this screen is
+     *    offered, and the user can run the command again.
      *  - `openExternalUrl` is the one command that reaches outside the app at all,
      *    and it is the one that was narrowed: see `AndroidBridge.openExternalUrl`,
      *    which now refuses this app's own `vscodroid://callback`.
@@ -5337,6 +5367,23 @@ class MainActivity : AppCompatActivity() {
                         } else if (d.cmd === 'toggleExtraKeyRow') {
                             result = AndroidBridge.toggleExtraKeyRow(token);
                             ch.postMessage({id: d.id, ok: true, data: result});
+                        } else if (d.cmd === 'getUiScale' && window.__vscodroidUiScale) {
+                            // This and the next are answered in the page, with no
+                            // bridge call: the scale is the page's own viewport and
+                            // is kept in its localStorage. The document-start
+                            // script from addUiScaleScript leaves the hook.
+                            ch.postMessage({id: d.id, ok: true, data: window.__vscodroidUiScale.state()});
+                        } else if (d.cmd === 'setUiScale' && window.__vscodroidUiScale) {
+                            window.__vscodroidUiScale.set(d.scale, function(scale) {
+                                ch.postMessage({id: d.id, ok: true, data: scale});
+                            });
+                        } else if (d.cmd === 'getUiScale' || d.cmd === 'setUiScale') {
+                            // No hook: the WebView cannot run document-start scripts.
+                            ch.postMessage({
+                                id: d.id, ok: false,
+                                error: 'The installed Android System WebView cannot scale the interface. ' +
+                                    'Update it from Google Play, then reopen VSCodroid.'
+                            });
                         } else if (d.cmd === 'openExternalUrl') {
                             // The only branch here whose bridge method can decline. Every
                             // other one either returns data or cannot fail in a way the
@@ -6765,6 +6812,48 @@ internal fun folderOpenTarget(
         ?: folderPath
 
 /**
+ * Where to send the workbench for a device folder that has just been synced: [target],
+ * the copy at [mirrorPath] or a workspace file in it, spelled through [namedPath] or
+ * left on the copy's hash path.
+ *
+ * The workbench names a folder after the last segment of its path, so the named path,
+ * `saf-mirrors/by-name/<hash>/<name>` (`SafStorageManager.namedPathFor`), is what shows
+ * the folder's own name in place of the hash. But it keeps open editors, unsaved changes
+ * and terminals per path, so moving a folder from one spelling to the other leaves all
+ * of that behind under the first, where nothing would bring it back. Hence three rules,
+ * in order:
+ *
+ * - A folder the page already has open keeps the spelling it is open under. Picking it
+ *   again is how fresh content is pulled down, and it must come back with its editors.
+ * - Otherwise the named path is used when [byName]: the copy was made by this open, or a
+ *   page has opened it by name before, so its state is there or nowhere.
+ * - Otherwise the hash path: a copy older than named paths, whose state may be under its
+ *   hash. The bundled extension offers the move from there, where it can see whether
+ *   anything would be left behind.
+ *
+ * [openNow] is the folder the page has open, as the page spells it.
+ */
+internal fun deviceFolderTarget(
+    target: String,
+    mirrorPath: String,
+    namedPath: String?,
+    byName: Boolean,
+    openNow: String?,
+): String {
+    val mirror = File(mirrorPath)
+    val onScreen = openNow?.let { open ->
+        if (open == mirrorPath || open.startsWith(mirrorPath + File.separator)) {
+            mirrorPath
+        } else {
+            SafStorageManager.namedRootOf(open, mirror.parent.orEmpty())
+                ?.takeIf { (_, hash) -> hash == mirror.name }?.first
+        }
+    }
+    val root = onScreen ?: namedPath?.takeIf { byName } ?: mirrorPath
+    return root + target.removePrefix(mirrorPath)
+}
+
+/**
  * Whether a folder switch that failed should leave the previous folder watched.
  *
  * The watcher is stopped before every sync, so something has to decide what a
@@ -6869,6 +6958,145 @@ internal fun connectionHealthProbe(): String =
         }
         return 'ok';
     })()
+    """.trimIndent()
+
+/**
+ * Applies the size chosen with **VSCodroid: UI Scale** to every workbench page,
+ * as the page is parsed.
+ *
+ * Nothing in the workbench scales its own chrome: `editor.fontSize` and the
+ * terminal's font size reach those two only, `window.zoomLevel` does nothing in
+ * the web workbench, and Android's font size never arrives because `textZoom` is
+ * pinned. The page's viewport does reach it. With its three scale keys set to the
+ * size, the WebView lays the page out narrower by that factor and draws it larger
+ * to fill the view, and taps, the caret, menus and the keyboard follow, measured
+ * on an API 33 emulator at 125%. CSS `zoom` on the root is no answer: the
+ * workbench still sized itself to the window, its right edge went off screen and
+ * a menu opened away from the finger.
+ *
+ * The element is rewritten as the parser inserts it, before the first layout, so
+ * a page is never laid out at 100% first; from `onPageFinished` the change would
+ * race the workbench's first layout. The relay's `getUiScale` and `setUiScale`
+ * read and change it live through the hook the script leaves, and the size is kept
+ * in the page's localStorage, which holds it across reloads and restarts. A port
+ * move loses it with everything else the page keeps by origin.
+ *
+ * Registered for every origin because a rule cannot leave the port open (one
+ * without a port names port 80 only) and the server's port is not known when the
+ * WebView is set up. The script returns at once anywhere but the top frame at `/`
+ * on the loopback address.
+ */
+internal fun addUiScaleScript(webView: WebView) {
+    if (WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+        try {
+            WebViewCompat.addDocumentStartJavaScript(webView, uiScaleScript(), setOf("*"))
+        } catch (e: RuntimeException) {
+            // The editor matters more than its size: the page stays at 100%, and
+            // with no hook in it the command says the WebView needs updating.
+            Logger.w("MainActivity", "Could not add the UI scale script: ${e.message}")
+        }
+    } else {
+        Logger.w("MainActivity", "This WebView cannot run a script at document start, so the UI scale stays at 100%")
+    }
+}
+
+/** The document-start script [addUiScaleScript] adds. */
+internal fun uiScaleScript(): String =
+    """
+    (function() {
+        // Every frame of every origin starts with this, since the rule it is
+        // registered under cannot name the server's port. Only the workbench
+        // page is scaled: the top frame at / on the loopback address.
+        if (window.top !== window || location.pathname !== '/' ||
+            (location.hostname !== '127.0.0.1' && location.hostname !== 'localhost')) return;
+        var KEY = 'vscodroid.uiScale';
+        var SCALES = [1, 1.1, 1.25, 1.5];
+        // The narrowest the page may get at a size offered, in CSS px. At 329, a
+        // 411 dp phone at 125%, the editor beside an open side bar was 111 wide.
+        var MIN_WIDTH = 320;
+        var current = 1;
+
+        // The sizes that keep the page at least MIN_WIDTH wide on this screen,
+        // by its narrower side, since turning the phone does not reload the page.
+        function offered() {
+            var narrow = Math.min(screen.width, screen.height);
+            return SCALES.filter(function(s) { return s === 1 || narrow / s >= MIN_WIDTH; });
+        }
+
+        // Sets the scale keys of the page's own viewport element to s and keeps
+        // every other key, viewport-fit included. False while there is none.
+        function apply(s) {
+            var meta = document.querySelector('meta[name="viewport"]');
+            if (!meta) return false;
+            var keep = (meta.getAttribute('content') || '').split(',').map(function(p) {
+                return p.trim();
+            }).filter(function(p) {
+                return p && !/^(initial|minimum|maximum)-scale\s*=/.test(p);
+            });
+            meta.setAttribute('content', keep.concat(
+                ['initial-scale=' + s, 'minimum-scale=' + s, 'maximum-scale=' + s]).join(', '));
+            return true;
+        }
+
+        // Whether the page is drawn at s and laid out no wider than what is on
+        // screen. That layout is a WebView behaviour, not a standard: with wide
+        // viewport mode off, as this app leaves it, a device-width page is laid
+        // out at the view's width divided by its initial scale. Without that the
+        // page would stay as wide as the view and be drawn larger than it, its
+        // right edge off the screen.
+        function tookEffect(s) {
+            var vv = window.visualViewport;
+            return !!vv && Math.abs(vv.scale - s) < 0.01 &&
+                document.documentElement.clientWidth <= vv.width + 1;
+        }
+
+        // Judged two frames on, once the page has been laid out and drawn at s,
+        // and put back to 100% if s did not take effect. A size chosen in the
+        // meantime is left alone. Answers the size in force.
+        function settle(s, done) {
+            requestAnimationFrame(function() {
+                requestAnimationFrame(function() {
+                    if (s === current && s !== 1 && !tookEffect(s)) {
+                        console.warn('[VSCodroid] UI scale ' + s + ' did not take effect, back to 100%');
+                        localStorage.removeItem(KEY);
+                        current = 1;
+                        apply(1);
+                    }
+                    done(current);
+                });
+            });
+        }
+
+        // What the relay's getUiScale and setUiScale answer with.
+        window.__vscodroidUiScale = {
+            state: function() { return { scale: current, choices: offered() }; },
+            set: function(s, done) {
+                if (offered().indexOf(s) < 0) { done(current); return; }
+                if (s === 1) localStorage.removeItem(KEY);
+                else localStorage.setItem(KEY, String(s));
+                current = s;
+                apply(s);
+                settle(s, done);
+            }
+        };
+
+        // The size chosen, or the largest under it that this screen still allows.
+        var chosen = Number(localStorage.getItem(KEY));
+        current = offered().filter(function(s) { return s <= chosen; }).pop() || 1;
+        if (current === 1) return;
+        // As the parser inserts the element, which is before the first layout.
+        var watch = new MutationObserver(function() {
+            if (!apply(current)) return;
+            watch.disconnect();
+            settle(current, function() {});
+        });
+        watch.observe(document, { childList: true, subtree: true });
+        // A page without the element is not watched for the rest of its life.
+        document.addEventListener('DOMContentLoaded', function() {
+            watch.disconnect();
+            if (!document.querySelector('meta[name="viewport"]')) current = 1;
+        });
+    })();
     """.trimIndent()
 
 /**
