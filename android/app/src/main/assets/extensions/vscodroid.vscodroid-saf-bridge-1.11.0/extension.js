@@ -718,6 +718,10 @@ function activate(context) {
     const silencedSharedStorage = () =>
         /** @type {string[]} */ (context.globalState.get(SILENCED_SHARED_STORAGE, []));
     const warnSharedStorage = async () => {
+        // With All files access (Environment.hasAllFilesAccess) the app sees every
+        // file on shared storage, so the "Android hides the files other apps
+        // saved" warning below would be false.
+        if (process.env.VSCODROID_ALL_FILES_ACCESS === '1') return;
         for (const folder of vscode.workspace.workspaceFolders || []) {
             const where = sharedStorageFolder(folder.uri.path);
             if (!where || silencedSharedStorage().includes(where.key)) continue;
