@@ -498,7 +498,7 @@ class FirstRunSetup(
             // what answers that is the pre-flight above rather than anything
             // here: it asks for what is MISSING, so every byte this attempt did
             // write is counted in the device's favour on the next one. An abort
-            // at the 800th MiB leaves a retry asking for the remainder plus the
+                        // at the 800th MiB leaves a retry asking for the remainder plus the
             // room to rewrite one file, a figure the user can act on, and
             // not for a second 874 MiB the device has just spent on us. The two
             // are one mechanism and have to move together.
@@ -748,7 +748,8 @@ class FirstRunSetup(
             // abort in [runSetupLocked] hangs off that boolean: a null at the
             // `vscode-reh` root would have reported a complete extraction with
             // zero files written, left `incomplete` empty, run
-            // markSetupComplete() and flipped isFirstRun() false for the life of
+            
+                 // markSetupComplete() and flipped isFirstRun() false for the life of
             // the install. `list` answers an empty array rather than null for a
             // path that is not there, so this is reached only when the platform
             // itself could not answer, and the safe direction for a function
@@ -998,7 +999,7 @@ class FirstRunSetup(
      * compiled into it. That is harmless on a device without Termux, where the
      * open fails with ENOENT and OpenSSL carries on. It is fatal on a device
      * where Termux has run: the directory belongs to another app, the open
-     * fails with EACCES, and Node refuses to start ("OpenSSL configuration
+          * fails with EACCES, and Node refuses to start ("OpenSSL configuration
      * error", before `main()`), six times over, so the user is told the server
      * crashed repeatedly. Read off the reporter's server.log in issue #447; no
      * emulator here had Termux on it, which is why it was never seen.
@@ -1248,7 +1249,7 @@ class FirstRunSetup(
 
     /**
      * Points git-core's entries at binaries the app is actually allowed to run.
-     *
+          *
      * Two kinds live there. Builtin subcommands are the same binary as git, so
      * they become symlinks to libgit.so. The remote helpers -- git-remote-http,
      * -https, -ftp and -ftps, one identical binary under four names -- are a
@@ -1498,7 +1499,7 @@ class FirstRunSetup(
      * There was a third, a link farm over the server's copilot-linux-arm64 for
      * the agent host. Patch 0020 keeps that host from starting here and the
      * tree stopped shipping the package with Code - OSS 1.139, so the farm is
-     * gone, and an upgrade removes the one an earlier release left
+          * gone, and an upgrade removes the one an earlier release left
      * ([pruneUnshippedServerEntries] from [runPreExtractionMigrations]).
      */
     fun setupCopilotAndroidAliases() {
@@ -1748,7 +1749,7 @@ class FirstRunSetup(
         // ones included, and only a list that merely excludes platforms let a
         // package through: measured with npm 10.8.2, and 11.16.0 has the same
         // check. Those two lines stay owned so an upgrade removes them, since npm
-        // appends a plain `os=` to an array an `os[]=` opened.
+                // appends a plain `os=` to an array an `os[]=` opened.
         //
         // The owned lines go first, and for `os` the order matters: npm takes the
         // last of a plain key given twice, so an `os=` the user set with
@@ -1998,7 +1999,7 @@ class FirstRunSetup(
     /**
      * Ensures .bashrc sources toolchain-env.sh for on-demand toolchain env vars.
      * Safe to call on every launch: only appends if the sourcing line is missing.
-     */
+          */
     fun ensureToolchainEnvSourcing() {
         val bashrc = File(context.filesDir, "home/.bashrc")
         if (bashrc.exists()) {
@@ -2248,7 +2249,7 @@ esac
         val start = content.indexOf(block)
         val end = start + block.length
 
-        val written = writeAtomically(bashrc) {
+                val written = writeAtomically(bashrc) {
             it.write(bytes, 0, start)
             it.write(STARTUP_DIR_BLOCK.toByteArray())
             it.write(bytes, end, bytes.size - end)
@@ -2498,7 +2499,7 @@ __vscodroid_pip_explain() {
         val runtime = pythonRuntimeInAssets() ?: return
         val minor = runtime.removePrefix("libpython").removeSuffix(".so")
         val conf = File(context.filesDir, "home/.pip/pip.conf")
-        val content = pipConfigContent(minor)
+                val content = pipConfigContent(minor)
         val existing = if (conf.exists()) {
             // A file that cannot be read may be the user's, and is left alone.
             runCatching { conf.readText() }.getOrElse {
@@ -2748,7 +2749,8 @@ claude() {
             writeAtomically(current) { source.copyTo(it) }
         }
         if (copied && legacy.delete()) {
-            Logger.i(tag, "Moved settings.json to the path the workbench reads")
+
+                        Logger.i(tag, "Moved settings.json to the path the workbench reads")
         } else {
             Logger.e(tag, "Could not move settings.json to ${current.absolutePath}")
         }
@@ -2891,7 +2893,10 @@ claude() {
         // PROJECTS_DIR export missing, on a device that had never had a
         // working shell to compare against.
         val initial = BASHRC_HEADER + "\n" + PROMPT_BLOCK + "\n\n" + """
-            export PROJECTS_DIR='$projectsDir'
+            # Resolved through ~/projects, which createStorageSymlinks() re-points on
+            # every launch. A literal path baked in here is decided once, at first
+            # run, possibly before the user has granted All files access.
+            export PROJECTS_DIR="${'$'}(cd -P "${'$'}HOME/projects" 2>/dev/null && pwd -P || echo '$projectsDir')"
             export SAF_MIRRORS_DIR='$safMirrorsDir'
             alias ls='ls --color=auto'
             alias ll='ls -la'
@@ -2995,7 +3000,7 @@ claude() {
      * @return true if settings.json now holds these defaults; on false it is
      *   untouched, per [writeAtomically].
      */
-    private fun writeDefaultSettings(): Boolean {
+         private fun writeDefaultSettings(): Boolean {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         // Environment.getMachineSettingsPath explains why it is this path and not
         // the `User/` one that looks like the obvious home for user settings.
@@ -3245,7 +3250,7 @@ claude() {
             //
             // Only what nothing else would name again, which is not the same
             // question as "what this attempt created". A directory that was
-            // already there belongs to the previous release and its files were
+                        // already there belongs to the previous release and its files were
             // each replaced atomically, so what survives is whole even if mixed,
             // and ours are re-unpacked unconditionally so a mixed one heals next
             // run. A fetched one used to be in this list only because it was
@@ -3495,7 +3500,7 @@ claude() {
      */
     private fun otherProfilesExtensionDirs(): Set<String>? {
         val profilesDir = File(Environment.getUserDataDir(context), "data/User/profiles")
-        if (!profilesDir.exists()) return emptySet()
+                if (!profilesDir.exists()) return emptySet()
         val profiles = profilesDir.listFiles() ?: return null
         val dirs = mutableSetOf<String>()
         for (profile in profiles) {
@@ -3745,7 +3750,7 @@ claude() {
             // that outlives the process.
             throw e
         } catch (e: Exception) {
-            // A manifest this code cannot parse is one the server wrote in a
+                        // A manifest this code cannot parse is one the server wrote in a
             // shape it understands; leave it alone rather than risk the user's
             // installed-extensions list.
             Logger.e(tag, "Could not reconcile extensions.json", e)
@@ -3995,7 +4000,8 @@ claude() {
          * The closure the running extraction reports through.
          *
          * In the companion beside [setupMutex] and for the same reason: the lock
-         * is process-wide, so the run and the screen watching it need not belong
+         
+              * is process-wide, so the run and the screen watching it need not belong
          * to the same [FirstRunSetup]. Volatile because it is written on the main
          * thread and read from Dispatchers.IO, which is what [lastFailure] and
          * `currentStep` are volatile for; as an instance field it was neither,
@@ -4245,7 +4251,7 @@ claude() {
          */
         internal fun requiredExtractionBytes(
             assetBytes: Long,
-            largestAssetBytes: Long,
+                        largestAssetBytes: Long,
             installedBytes: Long,
             extractedTreeBytes: Long,
         ): Long {
@@ -4495,7 +4501,7 @@ private val STARTUP_DIR_BLOCK = """
  * literals here rather than `$STARTUP_DIR_BEGIN` and the version constant, so
  * that bumping the version cannot quietly rewrite what this is supposed to
  * match. An exact match is the whole mechanism: a block the user edited matches
- * nothing here and is left as they wrote it.
+  * nothing here and is left as they wrote it.
  */
 private val LEGACY_STARTUP_DIR_BLOCK_V1 = """
     # >>> vscodroid startup dir v1 >>>
@@ -4745,7 +4751,7 @@ private fun firstPropertyIndent(content: String, brace: Int): String? =
  * survive forever: reconciliation keeps any entry whose directory exists. A
  * directory whose base id is still bundled is not retired; its versions belong
  * to [supersededExtensionDirs].
- */
+  */
 internal fun retiredOwnExtensionDirs(present: List<String>, bundled: List<String>): List<String> {
     fun base(dir: String): String? {
         val cut = dir.lastIndexOf('-')
@@ -5245,7 +5251,7 @@ internal fun writeAtomically(
                 // the one sentence this whole subsystem is built around, and it
                 // died here: the boolean reached the caller, the exception reached
                 // nothing, and a device that filled up mid-unpack was told "Setup
-                // failed" with no mention of disk on a screen whose only control
+                                // failed" with no mention of disk on a screen whose only control
                 // is Retry.
                 onError?.invoke(e.message?.trim().orEmpty().ifEmpty { e.javaClass.simpleName })
                 tmp.delete()
@@ -5495,7 +5501,7 @@ internal fun supersededPythonEntries(present: List<String>, runtime: String): Li
             PYTHON_RUNTIME_NAME.matches(name) -> name != runtime
             PYTHON_STDLIB_NAME.matches(name) -> name != currentStdlib
             else -> false
-        }
+                    }
     }
 }
 
@@ -5745,7 +5751,7 @@ internal fun refreshManagedPaths(
     // security prompt for no gain.
     //
     // Added for installs that predate it rather than only written at first run,
-    // and skipped when the key is already present in either state, because
+        // and skipped when the key is already present in either state, because
     // switching it back on is a decision worth keeping.
     if (!VERIFY_SIGNATURE.containsMatchIn(updated)) {
         updated = insertSetting(updated, "extensions.verifySignature", "false")
@@ -5995,7 +6001,7 @@ private fun rootBraceIndex(content: String): Int {
                 val end = content.indexOf("*/", i + 2)
                 if (end < 0) return -1
                 i = end + 2
-            }
+                            }
             else -> return -1
         }
     }
@@ -6063,3 +6069,5 @@ internal val OPENSSL_CONF_CONTENT = """
     [default_sect]
     activate = 1
 """.trimIndent() + "\n"
+
+ 
