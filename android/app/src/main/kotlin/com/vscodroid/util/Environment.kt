@@ -216,6 +216,10 @@ object Environment {
             // FirstRunSetup.setupOpensslConfig, beside the CA bundle above.
             "OPENSSL_CONF" to "$filesDir/usr/etc/tls/openssl.cnf",
             "NPM_CONFIG_PREFIX" to "$filesDir/usr",
+            // Read by the saf-bridge extension: with all-files access a folder on
+            // /storage/emulated/0 is fully visible, so its "Android hides the
+            // files other apps saved" warning must not be shown.
+            "VSCODROID_ALL_FILES_ACCESS" to if (hasAllFilesAccess()) "1" else "0",
             "NPM_CONFIG_CACHE" to "$cacheDir/npm-cache",
             // Beside npm's, for the same reason: a cache Clear Caches can empty and
             // Android can reclaim. Unset, pip keeps downloaded wheels in
@@ -326,25 +330,46 @@ object Environment {
     fun getProjectsDir(context: Context): String {
         val filesDir = context.filesDir.absolutePath
         val internal = "$filesDir/projects"
-        val externalDir = context.getExternalFilesDir(null) ?: return internal
-        val legacy = File(externalDir, "projects")
-        if (legacy.isDirectory) return legacy.absolutePath
-        // Answered before the link is read, so the ordinary case costs one stat
-        // and no syscall: once either directory is there, that is the answer.
+        val externalDir = context.getExternalFilesDir(null)
+        val legacy = externalDir?.let { File(it, "projects") }
+        if (legacy != null && legacy.isDirectory) return legacy.absolutePath
+
+        // MODIFIED (shared-storage default): with "All files access" the default
+        // workspace is a real folder on device storage, so it survives an
+        // uninstall and is visible to every file manager. An install that already
+        // holds work inside filesDir/projects keeps it there -- moving someone's
+        // files behind their back is still not this function's call.
+        if (hasAllFilesAccess()) {
+            val existing = File(internal)
+            if (existing.isDirectory && !existing.list().isNullOrEmpty()) return internal
+            return getSharedProjectsDir()
+        }
+
+        // No all-files access (yet): the previous behaviour, unchanged.
+        if (legacy == null) return internal
         if (File(internal).isDirectory) return internal
-        // Neither is on disk, which happens twice: on the first launch of a
-        // fresh install, and after something outside the app deleted the shared
-        // storage directory, which is what ensureProjectsDir() exists to repair.
-        // Telling those apart matters, because answering "internal" for the
-        // second would move an existing install's workspace on the strength of a
-        // deletion, with `.bashrc` still exporting the old path. `~/projects` is
-        // written beside the directory and outlives it, so its target is the
-        // record of which one this install has been using. Os.readlink throws off
-        // a device and on anything that is not a link, and both mean the same
-        // thing here: no such record.
         val link = runCatching { Os.readlink("$filesDir/home/projects") }.getOrNull()
         return if (link == legacy.absolutePath) legacy.absolutePath else internal
     }
+
+    const val SHARED_STORAGE_ROOT = "/storage/emulated/0"
+
+    /**
+     * Default workspace on shared storage: `/storage/emulated/0/VSCodroid/projects`.
+     * Outside every app-private directory, so Android leaves it alone when the
+     * app is uninstalled or its data is cleared.
+     */
+    fun getSharedProjectsDir(): String = "$SHARED_STORAGE_ROOT/VSCodroid/projects"
+
+    /**
+     * True when the app holds "All files access" (MANAGE_EXTERNAL_STORAGE), which
+     * is what lets plain `java.io.File` calls -- and therefore every terminal
+     * process this app spawns -- read and write /storage/emulated/0 directly.
+     * Never throws: under a plain JVM unit test the framework call is a stub, and
+     * "no access" is the answer that keeps the old behaviour.
+     */
+    fun hasAllFilesAccess(): Boolean =
+        runCatching { android.os.Environment.isExternalStorageManager() }.getOrDefault(false)
 
     fun getHomeDir(context: Context): String =
         "${context.filesDir}/home"
