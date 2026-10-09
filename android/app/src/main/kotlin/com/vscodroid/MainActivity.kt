@@ -54,6 +54,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.webkit.WebViewCompat
 import androidx.webkit.WebViewFeature
 import com.vscodroid.util.EditorLocale
+import com.vscodroid.storage.DeviceStoragePaths
 import com.vscodroid.util.Environment
 import com.vscodroid.bridge.AUTH_TAB_WINDOW_MILLIS
 import com.vscodroid.bridge.AndroidBridge
@@ -167,8 +168,23 @@ class MainActivity : AppCompatActivity() {
         if (granted) refreshServiceNotification()
     }
 
+    // Same Intent.ACTION_OPEN_DOCUMENT_TREE as the stock OpenDocumentTree contract,
+    // but opened on the root of device storage so the first screen the user sees
+    // is "Internal storage" with all of its folders (and the picker's own
+    // "Create new folder" button), the way Acode's Open Folder does.
+    private class OpenDeviceFolderTree : ActivityResultContracts.OpenDocumentTree() {
+        override fun createIntent(context: android.content.Context, input: Uri?): Intent =
+            super.createIntent(context, input).apply {
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+                )
+            }
+    }
+
     private val folderPickerLauncher = registerForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
+        OpenDeviceFolderTree()
     ) { uri ->
         uri?.let { handleSafFolderSelected(it) }
     }
@@ -382,7 +398,7 @@ class MainActivity : AppCompatActivity() {
         Logger.w(tag, "Started before setup had run; handing the launch to the splash screen")
         startActivity(Intent(this, SplashActivity::class.java).apply {
             data = intent?.data
-            intent?.extras?.let { putExtras(it) }
+                        intent?.extras?.let { putExtras(it) }
         })
         finish()
         return true
@@ -501,7 +517,12 @@ class MainActivity : AppCompatActivity() {
 
     fun openFolderPicker() {
         try {
-            folderPickerLauncher.launch(null)
+            // EXTRA_INITIAL_URI: start at the top of internal storage.
+            folderPickerLauncher.launch(
+                DocumentsContract.buildTreeDocumentUri(
+                    "com.android.externalstorage.documents", "primary:"
+                )
+            )
         } catch (e: ActivityNotFoundException) {
             Logger.w(tag, "No document tree picker on this device", e)
         }
@@ -535,7 +556,39 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun handleSafFolderSelected(uri: Uri) = openSafFolder(uri, navigate = true)
+    private fun handleSafFolderSelected(uri: Uri) {
+        // Preferred route: the picked folder is a real path on device storage and
+        // this app may use it directly (All files access). Open it in place --
+        // no copy into saf-mirrors, nothing to sync, files stay where the user
+        // put them, and they survive an uninstall.
+        val direct = DeviceStoragePaths.treeUriToPath(uri)
+        if (direct != null && Environment.hasAllFilesAccess() && File(direct).isDirectory) {
+            openDirectFolder(uri, direct)
+            return
+        }
+        // Everything else (no all-files access, Drive/cloud providers, a volume
+        // the app cannot see as a path) keeps the original mirror-and-sync route.
+        openSafFolder(uri, navigate = true)
+    }
+
+    private fun openDirectFolder(uri: Uri, path: String) {
+        Logger.i(tag, "Opening a device folder in place")
+        // Still take the grant: it costs nothing and is the fallback if the
+        // all-files permission is later revoked from Settings.
+        runCatching { safManager.persistPermission(uri) }
+        lifecycleScope.launch {
+            val target = withContext(Dispatchers.IO) {
+                folderOpenTarget(path, File(path).list()?.asList().orEmpty())
+            }
+            if (serverPort > 0 && nodeService?.isServerReady() == true) {
+                navigateToFolder(serverPort, target)
+            } else {
+                Logger.i(tag, "The server is not serving; opening the folder once it is")
+                rememberWorkspaceFolder(target)
+                retryServerStart()
+            }
+        }
+    }
 
     private fun openSafFolder(uri: Uri, navigate: Boolean) {
         Logger.i(tag, "Opening the device folder ${safManager.getMirrorDir(uri).name}")
@@ -545,7 +598,8 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.saf_sync_message, treeUriLabel(uri.lastPathSegment)))
             .setCancelable(false)
             .create()
-
+            
+        
         syncingFolder = uri
 
         lifecycleScope.launch {
@@ -745,7 +799,7 @@ class MainActivity : AppCompatActivity() {
             if (isFinishing || isDestroyed) {
                 answered.countDown()
                 return@runOnUiThread
-            }
+                            }
             shown.set(
                 AlertDialog.Builder(this)
                     .setMessage(getString(R.string.saf_mirror_not_a_copy))
@@ -945,7 +999,7 @@ class MainActivity : AppCompatActivity() {
         notificationRefreshPending = false
         service.refreshNotification()
     }
-
+    
     private fun startAndBindService() {
         val serviceIntent = Intent(this, NodeService::class.java)
         try {
@@ -1145,7 +1199,7 @@ class MainActivity : AppCompatActivity() {
             },
             safManager = safManager,
             onDownloadNamed = { url, fileName -> downloads.onDownloadNamed(url, fileName) },
-            onDownloadChunk = { requestId, base64 -> downloads.onBytes(requestId, base64) },
+                        onDownloadChunk = { requestId, base64 -> downloads.onBytes(requestId, base64) },
             onDownloadComplete = { requestId, error -> downloads.onComplete(requestId, error) },
             onListMirrors = { deviceFolderCopiesAsJson() },
             onReclaimMirror = { hash, force -> removeDeviceFolderCopy(hash, force) },
@@ -1345,7 +1399,7 @@ class MainActivity : AppCompatActivity() {
                     '.part.statusbar {',
                     '  padding-left: env(safe-area-inset-left, 0px);',
                     '  padding-right: env(safe-area-inset-right, 0px);',
-                    '  padding-bottom: env(safe-area-inset-bottom, 0px);',
+                                        '  padding-bottom: env(safe-area-inset-bottom, 0px);',
                     '}',
                     '.part.titlebar {',
                     '  padding-top: env(safe-area-inset-top, 0px);',
@@ -1545,7 +1599,7 @@ class MainActivity : AppCompatActivity() {
                         reapplying = false;
                     }
                 }
-                document.addEventListener('pointerdown', function(e) {
+                                document.addEventListener('pointerdown', function(e) {
                     var target = e.target;
                     // A touch inside an open context menu decides nothing about the
                     // keyboard, and letting it decide destroys the menu.
@@ -1745,7 +1799,7 @@ class MainActivity : AppCompatActivity() {
                 };
                 applyAll();
             })();
-            """.trimIndent(),
+                        """.trimIndent(),
             null
         )
     }
@@ -1945,7 +1999,7 @@ class MainActivity : AppCompatActivity() {
                     var swallow = function (c) {
                         c.stopImmediatePropagation();
                         c.preventDefault();
-                        done();
+                                                done();
                     };
                     var lifted = function (u) {
                         if (u.pointerId !== pointer) return;
@@ -2145,7 +2199,7 @@ class MainActivity : AppCompatActivity() {
                     // The three floors above are for buttons, and a menu separator
                     // is an .action-item too: it sits inside the activity bar when
                     // the compact menubar is open and inside .context-view for a
-                    // right-click menu, so both floors land on a 1px divider and
+                                        // right-click menu, so both floors land on a 1px divider and
                     // render it as a blank band. Measured on an API 37 emulator at
                     // 411px portrait, with the build-time menu CSS in play: the File
                     // menu's seven separators were 71px each and the menu 1427px in
@@ -2345,7 +2399,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun injectDownloadCapture() {
         webView?.evaluateJavascript(
-            """
+                        """
             (function() {
                 if (window.__vscodroidDownload) return;
 
@@ -2545,7 +2599,7 @@ class MainActivity : AppCompatActivity() {
                     var token = (window.__vscodroid || {}).authToken;
                     if (!token || !d || !d.cmd) return;
                     try {
-                        var result;
+                                            var result;
                         if (d.cmd === 'openFolderPicker') {
                             AndroidBridge.openFolderPicker(token);
                             ch.postMessage({id: d.id, ok: true});
@@ -2745,7 +2799,7 @@ class MainActivity : AppCompatActivity() {
     private fun scrollableNotice(document: String): ScrollView {
         val body = TextView(this).apply {
             autoLinkMask = Linkify.WEB_URLS
-            typeface = Typeface.MONOSPACE
+                        typeface = Typeface.MONOSPACE
             textSize = 11f
             val pad = (16 * resources.displayMetrics.density).toInt()
             setPadding(pad, pad, pad, pad)
@@ -2945,7 +2999,6 @@ class MainActivity : AppCompatActivity() {
 internal const val HEALTH_CHECK_THRESHOLD_MS = 60_000L
 
 internal const val FORCE_RELOAD_THRESHOLD_MS = 300_000L
-
 private const val FORCED_REMOVAL_CONFIRM_MS = 45_000L
 
 internal const val PRESSURE_NONE = "none"
@@ -3145,7 +3198,6 @@ internal fun emptyWindowUrl(url: String?, port: Int): String? {
     }
     return if (closed) url else null
 }
-
 internal fun folderOpenTarget(
     folderPath: String,
     names: List<String>,
@@ -3345,7 +3397,7 @@ internal fun webViewCacheIsStale(clearedFor: String?, build: String): Boolean = 
 
 internal fun treeUriLabel(lastPathSegment: String?): String {
     val segment = lastPathSegment.orEmpty()
-    val tail = segment.substringAfterLast('/').substringAfterLast(':')
+        val tail = segment.substringAfterLast('/').substringAfterLast(':')
     return tail.ifBlank { segment }
 }
 
