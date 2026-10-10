@@ -137,9 +137,9 @@ class ActivityTeardownTest {
         }
 
         assertEquals(
-            4, calls.size,
-            "expected the two in openSafFolder, the one in restoreWatcherAfterFailure " +
-                "and the one in onDestroy. If a call site was added or removed, update " +
+            5, calls.size,
+            "expected the two in openSafFolder, the one in restoreWatcherAfterFailure, " +
+                "the one in openDirectFolder and the one in onDestroy. If a call site was added or removed, update " +
                 "this count and check the new one is off the main thread. Found: " +
                 calls.map { it.value.trim() },
         )
