@@ -119,6 +119,7 @@ function sendBridgeCommand(cmd, extra = {}, timeoutMs = BRIDGE_TIMEOUT_MS) {
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
+    _extensionContext = context;
 
     // -- Open Folder from Device --
 
@@ -718,13 +719,15 @@ function activate(context) {
     const silencedSharedStorage = () =>
         /** @type {string[]} */ (context.globalState.get(SILENCED_SHARED_STORAGE, []));
     const warnSharedStorage = async () => {
-        // With All files access (Environment.hasAllFilesAccess) the app sees every
-        // file on shared storage, so the "Android hides the files other apps
-        // saved" warning below would be false.
-        if (process.env.VSCODROID_ALL_FILES_ACCESS === '1') return;
         for (const folder of vscode.workspace.workspaceFolders || []) {
             const where = sharedStorageFolder(folder.uri.path);
             if (!where || silencedSharedStorage().includes(where.key)) continue;
+            // With All files access the app sees every file on shared storage, so
+            // "Android hides the files other apps saved" is false there and the
+            // warning is skipped. It is still true, permission or not, for the
+            // folders Android keeps private to other apps (picker === 'none':
+            // Android/data, Android/obb, Android/sandbox), so those keep warning.
+            if (where.picker !== 'none' && (await allFilesAccessGranted())) continue;
             const warned = await (warnedThisServer = warnedThisServer || readWarnedThisServer());
             if (warned.folders.has(where.key)) continue;
             // Marked before the dialog, which stays up for as long as the user
@@ -847,6 +850,33 @@ function deactivate() {
 }
 
 // -- Helpers --
+
+/** The context `activate` was given, kept for [allFilesAccessGranted]. @type {vscode.ExtensionContext | undefined} */
+let _extensionContext;
+
+/**
+ * Whether the app holds "All files access" right now. The app writes `1` or `0`
+ * to `<files>/home/.vscodroid/all-files-access` (Environment.publishAllFilesAccess)
+ * every time it starts or comes back from Settings, so this follows a grant or a
+ * revocation made while the editor is running, which an environment variable
+ * fixed at server start could not. A missing or unreadable file means "not granted":
+ * the warning is shown, which is the cautious answer.
+ *
+ * Bundled extensions live in `<files>/home/.vscodroid/extensions/<this one>`, so
+ * the file is two levels up, read through the editor's own file access as
+ * EDITOR_SERVER_NOTE is.
+ * @returns {Promise<boolean>}
+ */
+async function allFilesAccessGranted() {
+    try {
+        if (!_extensionContext) return false;
+        const marker = vscode.Uri.joinPath(_extensionContext.extensionUri, '..', '..', 'all-files-access');
+        const bytes = await vscode.workspace.fs.readFile(marker);
+        return Buffer.from(bytes).toString('utf8').trim() === '1';
+    } catch (_) {
+        return false;
+    }
+}
 
 /** The bug report notice's button, compared against the choice it returns. */
 const COPY = 'Copy';
