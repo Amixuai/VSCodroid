@@ -26,6 +26,13 @@ object DeviceStoragePaths {
         return documentIdToPath(docId)
     }
 
+    // FAT / exFAT volume serials: `1A2B-3C4D`.
+    private val SERIAL_VOLUME = Regex("^[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}$")
+
+    // ext4 / f2fs and adopted volumes carry a full UUID.
+    private val UUID_VOLUME =
+        Regex("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
+
     /**
      * ExternalStorageProvider document ids are `<volume>:<path below volume>`:
      * `primary:Documents/app`, `1A2B-3C4D:code` (SD card / USB), `home:notes`
@@ -36,16 +43,22 @@ object DeviceStoragePaths {
         val colon = docId.indexOf(':')
         // A bare `home` / `primary` is the volume root itself.
         val volume = if (colon < 0) docId else docId.substring(0, colon)
-        val below = if (colon < 0) "" else docId.substring(colon + 1).trim('/')
-        if (volume.isEmpty()) return null
-        if (below.split('/').any { it == ".." || it == "." }) return null
+        val belowRaw = if (colon < 0) "" else docId.substring(colon + 1)
+        if (volume.isEmpty() || belowRaw.indexOf('\u0000') >= 0) return null
 
-        val root = when (volume) {
-            "primary" -> PRIMARY_ROOT
-            "home" -> "$PRIMARY_ROOT/Documents"
-            // Volume ids of removable storage are filesystem UUIDs.
-            else -> if (volume.matches(Regex("[A-Za-z0-9-]+"))) "/storage/$volume" else return null
+        val segments = belowRaw.split('/').filter { it.isNotEmpty() }
+        if (segments.any { it == ".." || it == "." }) return null
+
+        val root = when {
+            volume == "primary" -> PRIMARY_ROOT
+            volume == "home" -> "$PRIMARY_ROOT/Documents"
+            // Removable storage is a mounted volume named by its serial or UUID.
+            // Anything else -- `raw:` (a literal path from the Downloads
+            // provider), `msd`, `image`, `video`, a cloud provider's own ids -- is
+            // not a place under /storage, so it is refused instead of guessed at.
+            SERIAL_VOLUME.matches(volume) || UUID_VOLUME.matches(volume) -> "/storage/$volume"
+            else -> return null
         }
-        return if (below.isEmpty()) root else "$root/$below"
+        return if (segments.isEmpty()) root else root + "/" + segments.joinToString("/")
     }
 }
