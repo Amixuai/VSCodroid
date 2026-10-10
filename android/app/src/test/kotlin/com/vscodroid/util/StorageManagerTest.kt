@@ -28,13 +28,9 @@ class StorageManagerTest {
     /**
      * The workspace row, and where it counts.
      *
-     * `getProjectsDir` answers one of two places: `filesDir/projects` on a new
-     * install, or `Android/data/<pkg>/files/projects` on an install from a
-     * release that kept the workspace on shared storage. The walk that builds
-     * `total` covers the first and not the second, so a legacy install's `total`
-     * disagreed with Android's app-info figure by the size of the user's work,
-     * and a fresh install had the same bytes inside `total` and in no row. Real
-     * directories, because the decision is made of `isDirectory` questions.
+     * The workspace is `<shared storage>/VSCodroid/projects`, outside `filesDir`,
+     * so the walk that builds `total` does not cover it and it has to be added.
+     * Real directories, because the decision is made of `isDirectory` questions.
      */
     @Nested
     inner class ProjectsRowTest {
@@ -44,16 +40,17 @@ class StorageManagerTest {
 
         private lateinit var context: Context
         private lateinit var filesDir: File
-        private lateinit var externalDir: File
+        private lateinit var workspace: File
 
         @BeforeEach
         fun stubStorage() {
             filesDir = File(root, "files").apply { mkdirs() }
-            externalDir = File(root, "external").apply { mkdirs() }
             context = mockk(relaxed = true)
             every { context.filesDir } returns filesDir
             every { context.cacheDir } returns File(root, "cache").apply { mkdirs() }
-            every { context.getExternalFilesDir(null) } returns externalDir
+            every { context.getExternalFilesDir(null) } returns File(root, "external").apply { mkdirs() }
+            Environment.sharedStorageRoot = File(root, "storage").absolutePath
+            workspace = File(Environment.getProjectsDir(context))
         }
 
         private fun fill(dir: File, bytes: Int) {
@@ -62,9 +59,9 @@ class StorageManagerTest {
         }
 
         @Test
-        fun `a workspace on shared storage has a row and is counted in total`() {
+        fun `the workspace has a row and is counted in total`() {
             fill(File(filesDir, "server"), 10)
-            fill(File(externalDir, "projects"), 30)
+            fill(workspace, 30)
 
             val breakdown = StorageManager.getStorageBreakdown(context)
 
@@ -76,23 +73,19 @@ class StorageManagerTest {
         }
 
         @Test
-        fun `a workspace under filesDir has a row and is not counted twice`() {
+        fun `a workspace that does not exist yet reads as zero`() {
             fill(File(filesDir, "server"), 10)
-            fill(File(filesDir, "projects"), 30)
 
             val breakdown = StorageManager.getStorageBreakdown(context)
 
-            assertEquals(30L, breakdown.getLong("projects"), "the workspace has no row")
-            assertEquals(
-                40L, breakdown.getLong("total"),
-                "a workspace already inside the filesDir walk was added to total again",
-            )
+            assertEquals(0L, breakdown.getLong("projects"))
+            assertEquals(10L, breakdown.getLong("total"))
         }
 
         /** The row is a figure, not an offer: nothing here may delete the user's work. */
         @Test
         fun `the workspace row is never offered to the clear action`() {
-            fill(File(filesDir, "projects"), 30)
+            fill(workspace, 30)
 
             val clearable = StorageManager.getStorageBreakdown(context).getJSONArray("clearable")
             val keys = (0 until clearable.length()).map { clearable.getString(it) }
