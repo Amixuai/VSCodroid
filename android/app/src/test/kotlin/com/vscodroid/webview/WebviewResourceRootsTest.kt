@@ -1,6 +1,7 @@
 package com.vscodroid.webview
 
 import android.content.Context
+import com.vscodroid.util.Environment
 import com.vscodroid.util.Logger
 import io.mockk.Runs
 import io.mockk.every
@@ -290,7 +291,7 @@ class PublishedResourceRootsTest {
             "a mirrored workspace"
         )
         assertNotNull(
-            resolveWebviewResource(File(filesDir, "projects/app/docs/diagram.png").path, roots),
+            resolveWebviewResource(File(Environment.getSharedProjectsDir(), "app/docs/diagram.png").path, roots),
             "the default workspace"
         )
     }
@@ -303,12 +304,12 @@ class PublishedResourceRootsTest {
      */
     @Test
     fun `a workspace an existing install left on shared storage is still served`() {
-        File(externalDir, "projects").mkdirs()
+        File(Environment.getSharedProjectsDir()).mkdirs()
 
         val roots = publishedResourceRoots(contextWith(externalDir))
 
         assertNotNull(
-            resolveWebviewResource(File(externalDir, "projects/app/docs/diagram.png").path, roots),
+            resolveWebviewResource(File(Environment.getSharedProjectsDir(), "app/docs/diagram.png").path, roots),
             "the workspace an upgraded install is still using"
         )
     }
@@ -326,7 +327,7 @@ class PublishedResourceRootsTest {
         val roots = publishedResourceRoots(contextWith(null))
 
         assertNotNull(
-            resolveWebviewResource(File(filesDir, "projects/app/docs/diagram.png").path, roots),
+            resolveWebviewResource(File(Environment.getSharedProjectsDir(), "app/docs/diagram.png").path, roots),
             "the default workspace still has to work"
         )
         assertNull(resolveWebviewResource(File(filesDir, "home/.ssh/id_ed25519").path, roots))
