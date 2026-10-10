@@ -475,6 +475,9 @@ jobs:
       - name: Fetch Code - OSS server
         env:
           GH_TOKEN: ${{ github.token }}
+          # This repo's own server release, not upstream's: upstream's has
+          # patches this checkout does not carry.
+          REPO: ${{ github.repository }}
         run: bash scripts/fetch-vscode-oss.sh
 
       - name: Copy the server into assets
