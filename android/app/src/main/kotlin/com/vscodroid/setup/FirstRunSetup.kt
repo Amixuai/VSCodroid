@@ -498,7 +498,7 @@ class FirstRunSetup(
             // what answers that is the pre-flight above rather than anything
             // here: it asks for what is MISSING, so every byte this attempt did
             // write is counted in the device's favour on the next one. An abort
-                        // at the 800th MiB leaves a retry asking for the remainder plus the
+            // at the 800th MiB leaves a retry asking for the remainder plus the
             // room to rewrite one file, a figure the user can act on, and
             // not for a second 874 MiB the device has just spent on us. The two
             // are one mechanism and have to move together.
@@ -673,23 +673,34 @@ class FirstRunSetup(
     }
 
     /**
+     * Everything that needs the workspace folder to be writable, done in one
+     * place so it can be run again when the permission is granted: make the
+     * folder, point `~/projects` at it, and write the welcome file into a folder
+     * that is new. A folder that already exists is never given a welcome file, so
+     * a README the user deleted does not come back on the next launch.
+     *
+     * @return whether the workspace folder is there and a directory.
+     */
+    fun ensureWorkspaceReady(): Boolean {
+        val dir = File(Environment.getProjectsDir(context))
+        val existed = dir.isDirectory
+        ensureProjectsDir()
+        if (!dir.isDirectory) return false
+        if (!existed) createWelcomeProject()
+        createStorageSymlinks()
+        return true
+    }
+
+    /**
      * Recreates the projects directory if it has gone.
      *
-     * Alone among the directories above, this one can live outside filesDir: an
-     * install that already had its projects on shared storage
-     * (/storage/emulated/0/Android/data/<pkg>/files/projects) keeps them there,
-     * which some routes outside the app can still reach (MTP over USB, a few OEM
-     * managers) and which Clear Data wipes outright. A new install gets
-     * filesDir/projects, because shared storage cannot hold a symbolic link and
-     * npm dies on the first one; Environment.getProjectsDir decides which. The
-     * rest are under filesDir, where nothing outside the app can reach them, so
-     * they only ever need creating. This one can need repairing.
-     *
-     * Creating it once per version was not enough. isFirstRun() gates on
-     * versionName or versionCode, so a folder deleted after setup stayed missing
-     * through every relaunch and force-stop: the explorer was empty, new files could not be
-     * saved, and terminals started in a directory that was not there. The only
-     * ways back were clearing app data or installing a new version.
+     * The directory is `/storage/emulated/0/VSCodroid/projects` on the device's
+     * physical storage, always ([Environment.getProjectsDir]); there is no
+     * private-storage alternative to fall back to. It can be missing because
+     * "All files access" has not been granted yet, which is the normal state of a
+     * first run, or because something outside the app deleted it. In the first
+     * case this fails and logs, and [ensureWorkspaceReady] repeats the work the
+     * moment the permission arrives.
      *
      * Asks isDirectory rather than exists, because a plain file at that path
      * answers yes to the second question and is no more usable than nothing.
@@ -748,8 +759,7 @@ class FirstRunSetup(
             // abort in [runSetupLocked] hangs off that boolean: a null at the
             // `vscode-reh` root would have reported a complete extraction with
             // zero files written, left `incomplete` empty, run
-            
-                 // markSetupComplete() and flipped isFirstRun() false for the life of
+            // markSetupComplete() and flipped isFirstRun() false for the life of
             // the install. `list` answers an empty array rather than null for a
             // path that is not there, so this is reached only when the platform
             // itself could not answer, and the safe direction for a function
@@ -999,7 +1009,7 @@ class FirstRunSetup(
      * compiled into it. That is harmless on a device without Termux, where the
      * open fails with ENOENT and OpenSSL carries on. It is fatal on a device
      * where Termux has run: the directory belongs to another app, the open
-          * fails with EACCES, and Node refuses to start ("OpenSSL configuration
+     * fails with EACCES, and Node refuses to start ("OpenSSL configuration
      * error", before `main()`), six times over, so the user is told the server
      * crashed repeatedly. Read off the reporter's server.log in issue #447; no
      * emulator here had Termux on it, which is why it was never seen.
@@ -1249,7 +1259,7 @@ class FirstRunSetup(
 
     /**
      * Points git-core's entries at binaries the app is actually allowed to run.
-          *
+     *
      * Two kinds live there. Builtin subcommands are the same binary as git, so
      * they become symlinks to libgit.so. The remote helpers -- git-remote-http,
      * -https, -ftp and -ftps, one identical binary under four names -- are a
@@ -1499,7 +1509,7 @@ class FirstRunSetup(
      * There was a third, a link farm over the server's copilot-linux-arm64 for
      * the agent host. Patch 0020 keeps that host from starting here and the
      * tree stopped shipping the package with Code - OSS 1.139, so the farm is
-          * gone, and an upgrade removes the one an earlier release left
+     * gone, and an upgrade removes the one an earlier release left
      * ([pruneUnshippedServerEntries] from [runPreExtractionMigrations]).
      */
     fun setupCopilotAndroidAliases() {
@@ -1749,7 +1759,7 @@ class FirstRunSetup(
         // ones included, and only a list that merely excludes platforms let a
         // package through: measured with npm 10.8.2, and 11.16.0 has the same
         // check. Those two lines stay owned so an upgrade removes them, since npm
-                // appends a plain `os=` to an array an `os[]=` opened.
+        // appends a plain `os=` to an array an `os[]=` opened.
         //
         // The owned lines go first, and for `os` the order matters: npm takes the
         // last of a plain key given twice, so an `os=` the user set with
@@ -1999,7 +2009,7 @@ class FirstRunSetup(
     /**
      * Ensures .bashrc sources toolchain-env.sh for on-demand toolchain env vars.
      * Safe to call on every launch: only appends if the sourcing line is missing.
-          */
+     */
     fun ensureToolchainEnvSourcing() {
         val bashrc = File(context.filesDir, "home/.bashrc")
         if (bashrc.exists()) {
@@ -2249,7 +2259,7 @@ esac
         val start = content.indexOf(block)
         val end = start + block.length
 
-                val written = writeAtomically(bashrc) {
+        val written = writeAtomically(bashrc) {
             it.write(bytes, 0, start)
             it.write(STARTUP_DIR_BLOCK.toByteArray())
             it.write(bytes, end, bytes.size - end)
@@ -2271,7 +2281,7 @@ esac
      * definitions. bash takes the last one, so that is the one that runs, and
      * appending is the only way to change a file the user is free to edit.
      */
-    private val npmBlockMarker = "__vscodroid_symlink_note()"
+    private val npmBlockMarker = NpmBinLinks.BLOCK_MARKER
 
     private fun npmBashFunctions(): String = """
 
@@ -2279,23 +2289,52 @@ esac
 # VSCODROID_PLATFORM_FIX=1: override process.platform to "linux" for npm only
 # (child processes like Rollup/esbuild see real "android" platform)
 # --prefer-offline: use local cache first, saves time on slow mobile connections
+#
+# In a folder that cannot hold a symbolic link (shared storage) npm is run with
+# npm_config_bin_links=false, which is --no-bin-links, and npm_config_install_links=true,
+# so an install writes no node_modules/.bin links and copies file: dependencies. Never
+# for a global command. The tools that lack a .bin entry are found by
+# command_not_found_handle below. See NpmBinLinks.kt for the reasoning.
 npm() {
-    VSCODROID_PLATFORM_FIX=1 node "${'$'}PREFIX/lib/node_modules/npm/bin/npm-cli.js" --prefer-offline "${'$'}@"
+    if __vscodroid_npm_nolinks "${'$'}@"; then
+        npm_config_bin_links=false npm_config_install_links=true VSCODROID_PLATFORM_FIX=1 node "${'$'}PREFIX/lib/node_modules/npm/bin/npm-cli.js" --prefer-offline "${'$'}@"
+    else
+        VSCODROID_PLATFORM_FIX=1 node "${'$'}PREFIX/lib/node_modules/npm/bin/npm-cli.js" --prefer-offline "${'$'}@"
+    fi
     # Captured before anything else runs, and handed back below, so wrapping the
     # command cannot change what a script or a task sees.
     local __npm_status=${'$'}?
     [ ${'$'}__npm_status -eq 0 ] || __vscodroid_symlink_note
     return ${'$'}__npm_status
 }
-npx() { VSCODROID_PLATFORM_FIX=1 node "${'$'}PREFIX/lib/node_modules/npm/bin/npx-cli.js" "${'$'}@"; }
+# A tool installed in this folder runs from its own package when there is no .bin
+# link for it, which is also what keeps `npx tool` working offline.
+npx() {
+    if __vscodroid_npm_nolinks "${'$'}@"; then
+        case "${'$'}{1-}" in
+            ""|-*|*/*) ;;
+            *)
+                local __npx_bin
+                __npx_bin="${'$'}(__vscodroid_find_local_bin "${'$'}1" 2>/dev/null)"
+                if [ -n "${'$'}__npx_bin" ]; then
+                    shift
+                    __vscodroid_run_bin_file "${'$'}__npx_bin" "${'$'}@"
+                    return ${'$'}?
+                fi
+                ;;
+        esac
+    fi
+    VSCODROID_PLATFORM_FIX=1 node "${'$'}PREFIX/lib/node_modules/npm/bin/npx-cli.js" "${'$'}@"
+}
+""" + "\n" + NpmBinLinks.NOLINKS_FUNCTION + NpmBinLinks.BIN_FALLBACK_FUNCTIONS + """
 
 # One line of cause when npm fails somewhere that cannot hold a symbolic link.
 # npm writes node_modules/.bin/<name> as a link for every package that ships an
 # executable, which is most of them, and shared storage is served through FUSE,
-# which has no symlink(2) at all: the install dies with EPERM on a .bin path that
-# says nothing about where the folder lives. Measured on an API 37 emulator:
-# `ln -s` under Android/data answers "Permission denied" where the same call
-# under the app's own files directory succeeds.
+# which has no symlink(2) at all. npm() above already tells npm not to write those
+# links in such a folder, so a failure that still ends here needed a link for some
+# other reason: an npm workspace, `npm link`, or a package whose own install script
+# makes one.
 #
 # The directory is ASKED rather than its path matched, so this says nothing about
 # a workspace it does not recognise and nothing at all where links do work. Once
@@ -2313,9 +2352,10 @@ __vscodroid_symlink_note() {
         return 0
     fi
     __VSCODROID_SYMLINK_NOTED=1
-    echo "vscodroid: this folder is on shared storage, which cannot hold symbolic links," >&2
-    echo "vscodroid: so npm cannot create node_modules/.bin here. Move the project to" >&2
-    echo "vscodroid: internal storage and open it there:  mv \"${'$'}PWD\" ~/" >&2
+    echo "vscodroid: this folder is on shared storage, which cannot hold symbolic links." >&2
+    echo "vscodroid: Normal installs here skip the node_modules/.bin links on their own, so" >&2
+    echo "vscodroid: this failure is something that needs a real link: an npm workspace," >&2
+    echo "vscodroid: 'npm link', or a package that makes its own. Those cannot run in this folder." >&2
 }
 """
 
@@ -2499,7 +2539,7 @@ __vscodroid_pip_explain() {
         val runtime = pythonRuntimeInAssets() ?: return
         val minor = runtime.removePrefix("libpython").removeSuffix(".so")
         val conf = File(context.filesDir, "home/.pip/pip.conf")
-                val content = pipConfigContent(minor)
+        val content = pipConfigContent(minor)
         val existing = if (conf.exists()) {
             // A file that cannot be read may be the user's, and is left alone.
             runCatching { conf.readText() }.getOrElse {
@@ -2749,8 +2789,7 @@ claude() {
             writeAtomically(current) { source.copyTo(it) }
         }
         if (copied && legacy.delete()) {
-
-                        Logger.i(tag, "Moved settings.json to the path the workbench reads")
+            Logger.i(tag, "Moved settings.json to the path the workbench reads")
         } else {
             Logger.e(tag, "Could not move settings.json to ${current.absolutePath}")
         }
@@ -2893,10 +2932,7 @@ claude() {
         // PROJECTS_DIR export missing, on a device that had never had a
         // working shell to compare against.
         val initial = BASHRC_HEADER + "\n" + PROMPT_BLOCK + "\n\n" + """
-            # Resolved through ~/projects, which createStorageSymlinks() re-points on
-            # every launch. A literal path baked in here is decided once, at first
-            # run, possibly before the user has granted All files access.
-            export PROJECTS_DIR="${'$'}(cd -P "${'$'}HOME/projects" 2>/dev/null && pwd -P || echo '$projectsDir')"
+            export PROJECTS_DIR='$projectsDir'
             export SAF_MIRRORS_DIR='$safMirrorsDir'
             alias ls='ls --color=auto'
             alias ll='ls -la'
@@ -3000,7 +3036,7 @@ claude() {
      * @return true if settings.json now holds these defaults; on false it is
      *   untouched, per [writeAtomically].
      */
-         private fun writeDefaultSettings(): Boolean {
+    private fun writeDefaultSettings(): Boolean {
         val nativeLibDir = context.applicationInfo.nativeLibraryDir
         // Environment.getMachineSettingsPath explains why it is this path and not
         // the `User/` one that looks like the obvious home for user settings.
@@ -3250,7 +3286,7 @@ claude() {
             //
             // Only what nothing else would name again, which is not the same
             // question as "what this attempt created". A directory that was
-                        // already there belongs to the previous release and its files were
+            // already there belongs to the previous release and its files were
             // each replaced atomically, so what survives is whole even if mixed,
             // and ours are re-unpacked unconditionally so a mixed one heals next
             // run. A fetched one used to be in this list only because it was
@@ -3500,7 +3536,7 @@ claude() {
      */
     private fun otherProfilesExtensionDirs(): Set<String>? {
         val profilesDir = File(Environment.getUserDataDir(context), "data/User/profiles")
-                if (!profilesDir.exists()) return emptySet()
+        if (!profilesDir.exists()) return emptySet()
         val profiles = profilesDir.listFiles() ?: return null
         val dirs = mutableSetOf<String>()
         for (profile in profiles) {
@@ -3750,7 +3786,7 @@ claude() {
             // that outlives the process.
             throw e
         } catch (e: Exception) {
-                        // A manifest this code cannot parse is one the server wrote in a
+            // A manifest this code cannot parse is one the server wrote in a
             // shape it understands; leave it alone rather than risk the user's
             // installed-extensions list.
             Logger.e(tag, "Could not reconcile extensions.json", e)
@@ -4000,8 +4036,7 @@ claude() {
          * The closure the running extraction reports through.
          *
          * In the companion beside [setupMutex] and for the same reason: the lock
-         
-              * is process-wide, so the run and the screen watching it need not belong
+         * is process-wide, so the run and the screen watching it need not belong
          * to the same [FirstRunSetup]. Volatile because it is written on the main
          * thread and read from Dispatchers.IO, which is what [lastFailure] and
          * `currentStep` are volatile for; as an instance field it was neither,
@@ -4251,7 +4286,7 @@ claude() {
          */
         internal fun requiredExtractionBytes(
             assetBytes: Long,
-                        largestAssetBytes: Long,
+            largestAssetBytes: Long,
             installedBytes: Long,
             extractedTreeBytes: Long,
         ): Long {
@@ -4501,7 +4536,7 @@ private val STARTUP_DIR_BLOCK = """
  * literals here rather than `$STARTUP_DIR_BEGIN` and the version constant, so
  * that bumping the version cannot quietly rewrite what this is supposed to
  * match. An exact match is the whole mechanism: a block the user edited matches
-  * nothing here and is left as they wrote it.
+ * nothing here and is left as they wrote it.
  */
 private val LEGACY_STARTUP_DIR_BLOCK_V1 = """
     # >>> vscodroid startup dir v1 >>>
@@ -4751,7 +4786,7 @@ private fun firstPropertyIndent(content: String, brace: Int): String? =
  * survive forever: reconciliation keeps any entry whose directory exists. A
  * directory whose base id is still bundled is not retired; its versions belong
  * to [supersededExtensionDirs].
-  */
+ */
 internal fun retiredOwnExtensionDirs(present: List<String>, bundled: List<String>): List<String> {
     fun base(dir: String): String? {
         val cut = dir.lastIndexOf('-')
@@ -5251,7 +5286,7 @@ internal fun writeAtomically(
                 // the one sentence this whole subsystem is built around, and it
                 // died here: the boolean reached the caller, the exception reached
                 // nothing, and a device that filled up mid-unpack was told "Setup
-                                // failed" with no mention of disk on a screen whose only control
+                // failed" with no mention of disk on a screen whose only control
                 // is Retry.
                 onError?.invoke(e.message?.trim().orEmpty().ifEmpty { e.javaClass.simpleName })
                 tmp.delete()
@@ -5501,7 +5536,7 @@ internal fun supersededPythonEntries(present: List<String>, runtime: String): Li
             PYTHON_RUNTIME_NAME.matches(name) -> name != runtime
             PYTHON_STDLIB_NAME.matches(name) -> name != currentStdlib
             else -> false
-                    }
+        }
     }
 }
 
@@ -5751,7 +5786,7 @@ internal fun refreshManagedPaths(
     // security prompt for no gain.
     //
     // Added for installs that predate it rather than only written at first run,
-        // and skipped when the key is already present in either state, because
+    // and skipped when the key is already present in either state, because
     // switching it back on is a decision worth keeping.
     if (!VERIFY_SIGNATURE.containsMatchIn(updated)) {
         updated = insertSetting(updated, "extensions.verifySignature", "false")
@@ -6001,7 +6036,7 @@ private fun rootBraceIndex(content: String): Int {
                 val end = content.indexOf("*/", i + 2)
                 if (end < 0) return -1
                 i = end + 2
-                            }
+            }
             else -> return -1
         }
     }
@@ -6069,5 +6104,3 @@ internal val OPENSSL_CONF_CONTENT = """
     [default_sect]
     activate = 1
 """.trimIndent() + "\n"
-
- 
