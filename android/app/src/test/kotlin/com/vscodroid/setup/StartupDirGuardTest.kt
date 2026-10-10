@@ -47,7 +47,7 @@ class StartupDirGuardTest {
     private lateinit var context: Context
     private val home: File get() = File(filesDir, "home")
     private val bashrc: File get() = File(home, ".bashrc")
-    private val projects: File get() = File(externalDir, "projects")
+    private val projects: File get() = File(Environment.getProjectsDir(context))
 
     @BeforeEach
     fun setUp() {
