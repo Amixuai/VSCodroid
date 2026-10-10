@@ -2,7 +2,6 @@ package com.vscodroid.util
 
 import android.content.Context
 import android.net.Uri
-import android.system.Os
 import com.vscodroid.setup.ToolchainManager
 import java.io.File
 import java.security.MessageDigest
@@ -216,10 +215,6 @@ object Environment {
             // FirstRunSetup.setupOpensslConfig, beside the CA bundle above.
             "OPENSSL_CONF" to "$filesDir/usr/etc/tls/openssl.cnf",
             "NPM_CONFIG_PREFIX" to "$filesDir/usr",
-            // Read by the saf-bridge extension: with all-files access a folder on
-            // /storage/emulated/0 is fully visible, so its "Android hides the
-            // files other apps saved" warning must not be shown.
-            "VSCODROID_ALL_FILES_ACCESS" to if (hasAllFilesAccess()) "1" else "0",
             "NPM_CONFIG_CACHE" to "$cacheDir/npm-cache",
             // Beside npm's, for the same reason: a cache Clear Caches can empty and
             // Android can reclaim. Unset, pip keeps downloaded wheels in
@@ -292,84 +287,68 @@ object Environment {
         "${context.filesDir}/server/server.js"
 
     /**
-     * The default workspace: internal storage, unless this install already put
-     * the user's work on shared storage.
+     * The default workspace, and the only one: a real folder on the device's
+     * physical internal storage, `/storage/emulated/0/VSCodroid/projects`.
      *
-     * It used to be `getExternalFilesDir(null)/projects` for everyone, chosen so
-     * that a file manager could reach the code. That reachability is gone:
-     * Android 11 closed `Android/data` to other apps and to the system Files
-     * app, and minSdk here is 33, so no supported device has it. A few routes
-     * remain (MTP over USB, some OEM managers), which is how the folder gets
-     * deleted from outside at all, but nothing a user can rely on.
+     * It lives outside every app-private directory, so Android leaves it alone
+     * when the app is uninstalled or its data is cleared, and every file manager
+     * can reach it.
      *
-     * What did not go away is the filesystem. Shared storage is served through
-     * FUSE, which does not implement `symlink(2)` at all, so every symlink an
-     * ordinary toolchain writes fails with EPERM: measured on an API 37
-     * emulator, `ln -s` under `Android/data/<pkg>/files/projects` answers
-     * "Permission denied" while the same call under `filesDir` succeeds. That
-     * cost `npm install` any package shipping an executable, because npm writes
-     * `node_modules/.bin/<name>` as a link and dies on the first one, and it
-     * costs pnpm, a Python venv without `--copies` and any build step that links.
-     * The npm failure names a `.bin` path and an EPERM, neither of which a user
-     * has any reason to connect to where the folder lives.
+     * The answer is a constant on purpose. It does not look at the permission,
+     * at what exists on disk, or at what an earlier release did, because every
+     * such input is a way for the workspace to move without the user asking: a
+     * welcome file written before "All files access" was granted, a permission
+     * revoked in Settings, a directory deleted from outside. When the folder
+     * cannot be used yet, [FirstRunSetup.ensureProjectsDir] fails and says so, and
+     * [com.vscodroid.MainActivity] asks for the permission and repairs the folder
+     * the moment it is granted. Nothing here, or anywhere that calls it, falls
+     * back to `filesDir/projects`.
      *
-     * An install that already has a projects directory on shared storage keeps
-     * it, and that is not caution for its own sake: `.bashrc` bakes
-     * `PROJECTS_DIR` in when it is first written and nothing rewrites it, so an
-     * answer that moved under an existing install would leave every terminal
-     * starting somewhere the editor is not. Moving the user's own files is not
-     * something to do behind their back either. The directory's own existence is
-     * the record, because nothing creates it any more: a fresh install never has
-     * one and an install that does can only have got it from a release where it
-     * was the default.
-     *
-     * Clear Data still wipes whichever of the two is in use, and work that has to
-     * stay reachable from outside the app still belongs in a folder opened
-     * through the SAF picker. Neither of those changed with the location.
+     * [context] is kept so existing callers do not change.
      */
-    fun getProjectsDir(context: Context): String {
-        val filesDir = context.filesDir.absolutePath
-        val internal = "$filesDir/projects"
-        val externalDir = context.getExternalFilesDir(null)
-        val legacy = externalDir?.let { File(it, "projects") }
-        if (legacy != null && legacy.isDirectory) return legacy.absolutePath
-
-        // MODIFIED (shared-storage default): with "All files access" the default
-        // workspace is a real folder on device storage, so it survives an
-        // uninstall and is visible to every file manager. An install that already
-        // holds work inside filesDir/projects keeps it there -- moving someone's
-        // files behind their back is still not this function's call.
-        if (hasAllFilesAccess()) {
-            val existing = File(internal)
-            if (existing.isDirectory && !existing.list().isNullOrEmpty()) return internal
-            return getSharedProjectsDir()
-        }
-
-        // No all-files access (yet): the previous behaviour, unchanged.
-        if (legacy == null) return internal
-        if (File(internal).isDirectory) return internal
-        val link = runCatching { Os.readlink("$filesDir/home/projects") }.getOrNull()
-        return if (link == legacy.absolutePath) legacy.absolutePath else internal
-    }
-
-    const val SHARED_STORAGE_ROOT = "/storage/emulated/0"
+    @Suppress("UNUSED_PARAMETER")
+    fun getProjectsDir(context: Context): String = getSharedProjectsDir()
 
     /**
-     * Default workspace on shared storage: `/storage/emulated/0/VSCodroid/projects`.
-     * Outside every app-private directory, so Android leaves it alone when the
-     * app is uninstalled or its data is cleared.
+     * Root of the user's physical internal storage. A variable only so a JVM unit
+     * test can point it at a temporary directory; nothing else assigns it.
      */
-    fun getSharedProjectsDir(): String = "$SHARED_STORAGE_ROOT/VSCodroid/projects"
+    internal var sharedStorageRoot: String = "/storage/emulated/0"
+
+    fun getSharedProjectsDir(): String = "$sharedStorageRoot/VSCodroid/projects"
 
     /**
      * True when the app holds "All files access" (MANAGE_EXTERNAL_STORAGE), which
      * is what lets plain `java.io.File` calls -- and therefore every terminal
      * process this app spawns -- read and write /storage/emulated/0 directly.
      * Never throws: under a plain JVM unit test the framework call is a stub, and
-     * "no access" is the answer that keeps the old behaviour.
+     * "no access" is the safe answer.
      */
     fun hasAllFilesAccess(): Boolean =
         runCatching { android.os.Environment.isExternalStorageManager() }.getOrDefault(false)
+
+    /**
+     * A one-byte status file the editor's extensions read to learn whether the
+     * permission is held *right now*. An environment variable could not do that:
+     * it is fixed when the server starts, and the permission is granted or
+     * revoked while the server runs. App configuration, not workspace data.
+     */
+    fun getAllFilesAccessMarker(context: Context): String =
+        "${context.filesDir}/home/.vscodroid/all-files-access"
+
+    /** Writes the current permission state to [getAllFilesAccessMarker]; returns it. */
+    fun publishAllFilesAccess(context: Context): Boolean {
+        val granted = hasAllFilesAccess()
+        runCatching {
+            val marker = File(getAllFilesAccessMarker(context))
+            val wanted = if (granted) "1" else "0"
+            if (!marker.isFile || marker.readText().trim() != wanted) {
+                marker.parentFile?.mkdirs()
+                marker.writeText(wanted)
+            }
+        }
+        return granted
+    }
 
     fun getHomeDir(context: Context): String =
         "${context.filesDir}/home"
