@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">VSCodroid</string>
     <string name="notification_channel_name">VSCodroid Server</string>
     <string name="notification_channel_description">Keeps the local development server running</string>
@@ -386,6 +386,11 @@
          grant it could not use, which let a caller put the chooser in front of
          the user without asking for it, so the sentence has to carry the next
          step itself. -->
+    <string name="all_files_title" tools:ignore="MissingTranslation">Storage access needed</string>
+    <string name="all_files_message" tools:ignore="MissingTranslation">VSCodroid keeps your projects in /storage/emulated/0/VSCodroid on the device\'s own storage, so they stay when the app is uninstalled. Allow \"All files access\" to continue.</string>
+    <string name="all_files_open_settings" tools:ignore="MissingTranslation">Open settings</string>
+    <string name="all_files_exit" tools:ignore="MissingTranslation">Exit</string>
+    <string name="folder_not_on_device" tools:ignore="MissingTranslation">Pick a folder on this device\'s storage. Cloud folders and Android/data cannot be opened directly.</string>
     <string name="saf_permission_expired">Permission expired. Please select the folder again.</string>
 
     <!-- A device folder that did not open. Said as one sentence per case, with the
